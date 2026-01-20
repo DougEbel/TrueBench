@@ -1,0 +1,18 @@
+include prompt_for_db.tdb
+if :setup_error is set then goto end_script
+
+set eyecatch = -----------------
+echo :eyecatch Creating :i1 base view :eyecatch
+sql :bench_server delim=eof
+REPLACE VIEW :bench_schema.:i1 as
+SELECT tt.RunId, tt.TestName, tt.StartTime as TestStartTime,
+(((ru.TheDate (FORMAT 'YYYY-MM-DD')) (VARCHAR(11))) || ' ' || (ru.TheTime (VARCHAR(11)))) (TIMESTAMP(2)) Log_TS,
+ru.* 
+from dbc.:i1 ru
+join :bench_schema.testtracking tt
+on Log_TS between tt.StartTime and tt.StopTime;
+
+COMMENT ON VIEW :bench_schema.:i1 AS :i2;
+eof
+
+label end_script

@@ -1,0 +1,47 @@
+------------------------- Help for exec setup_host_utilities.tdb -------------------------
+
+This script creates a collection of useful macros that have evolved over hundreds of benchmarks. 
+These assist in:
+- creating DDL
+- manipulating table statistics
+- displaying system configuration information
+- reporting on space allocation for databases and their children
+- monitoring real-time execution of sessions and queries on a platform (when you don't have Viewpoint)
+
+None of these macros are needed for the basic reporting of test results.
+
+
+Host Utility Macros:
+
+amps                 Select performance information from all AMPs currently active
+CollectStatisticsColumns   For (database,table) or (database,) or (,parentdatabase) will generate collect statistics statements for all columns
+CollectStatisticsIndexes   For (database,table) or (database,) or (,parentdatabase) will generate collect statistics statements for all indexes
+CopyStats            copy stats from a database, table to a database, table based on the column list of the to table
+Copytables           Creates statements to copy all tables with data and stats from one db to another
+CountValues          Creates script to count number of values in each column
+CreateIndex          For (opt, database, table) or (opt, database,) or (opt,parentdatabase) will generate drop or create index statements based on opt
+CreateViewLong       Creates a view will all columns explicitly selected for a View DB, Table DB and TableName
+CreateViews          Creates list of create view statements against tables of a given database
+DbSpace              Shows space allocated/used for a given database and its children down a given depth for given scale 1=K, 2=MB, 3=GB, 4=TB
+DbSpaceG             Shows space allocated/used in GB for a given database (default DBC) and its children down a given depth (default 99) 
+DbSpaceM             Shows space allocated/used in MB for a given database (default DBC) and its children down a given depth (default 99) 
+List                 List out the comments for all macros in the benchmark databasename
+nodes                Select monitor details of all active/standby/down nodes
+nodesum              Summarize nodes by status, average/max cpu, etc
+queryband            Select queryband information for a sessionid
+querytext            Select current query text for a sessionid running on a vproc ID
+ReblockTables        For (database, table) or (database,) or (,parentdatabase) will generate alter table to reblock
+RowCount             For database (database,table) or (database,) or (,parentdatabase) will generate row count and table size select statements
+RowMinMax            Determines the min and max values for all columns in a given database and given table
+RowSize              Calculates the physical row width for a given database and given tablename
+sessions             Select monitor details of all active sessions
+sessionsum           Summarize session information from monitor showing active sessions and workload name
+ShowDb               Lists out all DDL in a database
+ShowDb_Children      Lists out all DDL in a database and all of its children
+showmacro            Creates list of show statements for the macros of a given database
+showprocedure        Creates list of show statements for the procedures of a given database
+showtable            Creates list of show statements for the tables of a given database
+showview             Creates list of show statements for the views of a given database
+steps                Select all steps for a sessionid on a vprocid
+Tablespace           Shows the sizes of tables under a given database along with the calculated skew
+

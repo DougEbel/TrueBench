@@ -1,0 +1,11 @@
+------------------------- Help for exec valiate_tdbench_host.tdb -------------------------
+
+This is an optional script that would be used if the TdBench user had been set up manually
+for some reason such as company IT policy.  It will check the count of rights that should be
+present for:
+- the TdBenchDB user/database to support reporting
+- DBC to be able to access DBQL and ResUsage for benchmark test analysis
+- SysLib so TestStart and TestStop can collect information about the Vantage configuration
+- tdwm so TestStart can access the TASM settings at the start of the test
+- PDCR if the PDCRDB environment variable was set in the tdbench_teradata_config.sh/tdbench_teradata_config.bat.
+

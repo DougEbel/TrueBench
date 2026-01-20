@@ -1,0 +1,95 @@
+@# TDBench 8.00 - Copyright (c) 2010, 2011, 2013, 2015, 2016, 2018, 2019, 2020, 2024 Teradata Corporation
+sql file:null ${TdBenchServer} delim=eof
+replace view ${TdBenchDb}.testviewrights as
+select * from dbc.dbqlogtbl;
+select top 1 CollectTimeStamp from ${TdBenchDb}.testviewrights;
+eof
+if :retcode = 0 then goto canviewdbc
+echo ERROR - unable to create views against dbc. You need select with grant option on DBC
+goto endteststart
+
+
+label canviewdbc
+sql file:null  ${TdBenchServer} drop view ${TdBenchDb}.testviewrights;
+echo text:temp/teststart.sql delim=eof
+Replace macro ${TdBenchDb}.TestStart(pTestName varchar(50), pRunTitle varchar(100) default '',
+      pReportingSeconds integer default null, pClientRunID smallint default null) as (
+
+insert into ${TdBenchDb}.testtracking (runid, TestName, RunTitle, starttime, ReleaseExecTime,  ReportingSeconds,
+     SystemType, DbmsVersion, Amps, Nodes, NodesUpAtStart , WorkersOnAtStart, NonWorkersOnAtStart,
+     AverageNodeCpuAtStart, RuleSetID, TdwmConfigname, TdwmChangeTimeStamp, ClientRunID, BenchSystemName)
+
+with onerow (onecol) as (select 1 one)
+select coalesce((select max(runid) from ${TdBenchDb}.testtracking),0) + 1, :pTestName, :pRuntitle, current_timestamp, current_timestamp, :pReportingSeconds,   -- 1-6
+     msp.systemtype, dbci.InfoData, hashamp()+1, mpr.nodes, mpr.NodesUpAtStart, si.WorkersOnAtStart, si.NonWorkersOnAtStart,   -- 7-13
+     mpr.AverageNodeCpuAtStart, tdwmc.RuleSetId, tdwmc.configname, tdwmc.tdwmChangeTimeStamp, :pClientRunID, '${TdBenchServer}'    -- 14-18
+from onerow  cross join
+
+  (select InfoData  from dbc.dbcinfo where InfoKey = 'VERSION') dbci cross join
+
+  (select sum(case when substring(username from 1 for character_length(InfoData)) = InfoData then 1 else 0 end) as WorkersOnAtStart,
+        sum(case when substring(Username from 1 for character_length(InfoData)) = InfoData or ProfileName is null then 1 else 0 end) as NonWorkersOnAtStart
+        from dbc.sessioninfo, ${TdBenchDb}.tdbenchinfo where InfoKey='PREFIX' ) as si,
+
+eof
+
+
+sql file:null ${TdBenchServer} delim=eof
+replace view ${TdBenchDb}.testviewrights as
+select  count(*) as nodes,
+ sum(case when status = 'U' then 1 else 0 end) as NodesUpAtStart,
+ average(cpuuse) as AverageNodeCpuAtStart
+ from table(syslib.monitorPhysicalResource()) as x;
+select * from ${TdBenchDb}.testviewrights;
+eof
+if :retcode = 0 then goto canrunsyslib
+echo WARNING - can not create view contining monitoring via Syslib. ${TdBenchEb} needs execute function with grant option on syslib
+
+echo append:temp/teststart.sql delim=eof
+(select null as systemtype from ${TdBenchDb}.onerow ) msp cross join
+   (select null as nodes, null as NodesUpAtStart, null as AverageNodeCpuAtStart from ${TdBenchDb}.onerow) as mpr cross join
+eof
+goto checktasm
+
+label canrunsyslib
+sql file:null  ${TdBenchServer} drop view ${TdBenchDb}.testviewrights;
+echo append:temp/teststart.sql delim=eof
+ (SELECT Max(systemtype) as systemtype FROM TABLE (syslib.MonitorSystemPhysicalConfig()) as x) msp  cross join
+ (select  count(*) as nodes,
+        sum(case when status = 'U' then 1 else 0 end) as NodesUpAtStart,
+        average(cpuuse) as AverageNodeCpuAtStart
+        from table(syslib.monitorPhysicalResource()) as x) as mpr  cross join
+eof
+
+label checktasm
+
+sql file:null ${TdBenchServer} delim=eof
+replace view ${TdBenchDb}.testviewrights as
+SELECT t1.RuleSetId, t2.configname
+ FROM TABLE (tdwm.TDWMinquire()) AS t1
+ left join tdwm.configurations t2 on t1.RuleSetId = t2.configid and t2.RemoveDate = 0
+ where (filter_category <> 'Inactive' or Throttle_category <> 'Inactive' or workload_category <> 'Inactive' or Event_Category <> 'Inactive') or t2.configid is null;
+select * from ${TdBenchDb}.testviewrights;
+
+eof
+if :retcode = 0 then goto canruntasm
+echo WARNING - can not create view containing TASM information. ${TdBenchDb} needs select, execute function with grant option on tdwm
+echo append:temp/teststart.sql (SELECT null as RuleSetID, null as ConfigName, null as tdwmChangeTimeStamp from ${TdBenchDb}.onerow) tdwmc
+goto finishmacro
+
+label canruntasm
+echo append:temp/teststart.sql delim=eof
+(SELECT t1.RuleSetId, t2.configname,
+      cast((((20000000 + nullifzero(changedate) mod 1000000 (format '9999-99-99')) (varchar(11))) || ' ' || changetime (varchar(30))) as timestamp(0)) as tdwmChangeTimeStamp
+      FROM TABLE (tdwm.TDWMinquire()) AS t1
+      left join tdwm.configurations t2 on t1.RuleSetId = t2.configid and t2.RemoveDate = 0
+      where (filter_category <> 'Inactive' or Throttle_category <> 'Inactive' or workload_category <> 'Inactive' or Event_Category <> 'Inactive') or t2.configid is null) tdwmc
+eof
+label finishmacro
+echo append:temp/teststart.sql \; );
+echo append:temp/teststart.sql comment on ${TdBenchDb}.TestStart as 'Add a line to TestTracking table at start of a test with timestamps and environmental metadata';
+echo append:temp/teststart.sql drop view ${TdBenchDb}.testviewrights;
+
+sql ${TdBenchServer} temp/teststart.sql
+
+label endteststart

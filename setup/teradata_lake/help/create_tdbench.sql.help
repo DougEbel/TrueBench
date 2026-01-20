@@ -1,0 +1,44 @@
+------------------------- Help for editing create_tdbench.sql ------------------------- 
+
+This will create the reporting database/user on the host Vantage platform with the necessary rights
+to support reporting. There are environment variables in the script set by ...config.sh/...config.bat
+and TdBench variables that are set by the setup script create_tdbench.tdb. When you run 
+create_tdbench.tdb, 
+- you'll be asked for the logon ID and password for the user that has the CREATE USER rights for the parent database 
+- you'll be asked for the parent database from which storage will be transfered for the TdBenchDb user
+- you'll be asked for the password that the TdBench user will use for logging onto the system. 
+
+Policies at companies vary widely about creating users and gaining access to contents of system databases. 
+The following may help you in navigating those policies when installing TdBench. It may be possible to 
+provide the statements to a system DBA so they do the setup for you. 
+
+create user ...
+   It is simplest if the reporting database and the logon ID to manage the test reporting are one in the same.
+   If you are not allowed to create users, you may create databases instead.
+
+   The space requirements for saving the TdBench TestTracking table is trivial. The distributed SQL allocates
+   2 GB ( 2 * 1024 **3 ).  You may change that to the smallest size practical based on the number of nodes
+   the data will be spread across. 
+
+grant all on ${TdBenchDb} to ${TdBenchDb} with grant option;
+   You may need to create multiple logon IDs for workers, and it is convient if you create them under
+   under the TdBenchDB. TdBench also has functions and procedures that support the reporting.  
+   the "with grant option" allows you to grant access to reporting to others and allows them 
+   to create their own reporting views against TdBench collected results. 
+
+grant select, execute on dbc to ${TdBenchDb} with grant option;
+   This allows TdBench to create views against DBQL and ResUsage tables and execute the flushing
+   of DBQL data at the end of a test without needing to wait for up to 10 minutes for automatic
+   flushing to disk. 
+
+grant exec function on syslib to ${TdBenchDb} with grant option;
+   The TestStart and TestStop macros will collect configuration information about the platform 
+   at the start and end of the test such as nodes running and number of AMPs. This help to 
+   determine the intentional or unintentional configuration changes. 
+
+grant exec function, select on tdwm to ${TdBenchDb} with grant option;
+   This allows the TestStart macros to determine the current TASM settings for each test. 
+
+If your company IT policy prevents all of these grants from being given, the scripts that set up
+the TestStart and TestStop macros will adapt their functioning to the granted rights. 
+

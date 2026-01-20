@@ -1,0 +1,49 @@
+------------------------- General Help on Setup for Teradata -------------------------
+
+This setup is designed to get you started faster and break down the tasks to give you options
+on how you use TdBench. 
+
+For more details on each step, type "help" followed by the number.  For example, "help 1"
+will provide information on executing "test_connect.tdb". 
+
+Options 1-4 help you to setup the environment every time TdBench runs. Those scripts could
+be setting the operating system environment variables or manipulating files and directories
+to prepare for a test.
+
+If you've changed any of the startup variables, you will want to restart TdBench so those
+settings are active for the next steps. 
+
+Option 6, executes test_connect.tdb to validate you can successfully connect to the DBMS.
+Too often users don't get the DBMS URL or IP address correct or they have installed TdBench
+on a server that is blocked by firewalls or network topography. It is a good idea to test
+your connection to the DBMS prior to running TdBench to ensure the URL/IP address, logon ID
+and password are correct.
+
+The next 2 steps involve setting up the host reporting user/database. Different companies
+have different rules about creating users and granting access to system databases. Ideally
+you wouldn't need to edit create_tdbench.sql and could proceed to executing that script. 
+Use the Help on that option number to get explanations on how the granted rights are used
+and if necessary, provide that script and the help information to your DBMS DBA to execute
+those statements for you. 
+
+Option 9 is optional if you ran the default create_tdbench.tdb. If someone else did the setup, 
+the valiate_tdbench_host.tdb will help you understand if any grants are missing.
+
+Finally, there are three scripts to set up the reporting environement for the TdBench
+database/user. 
+- The first creates the basic TdBench TestTracking table, the macros for providing
+  test starting and test stopping information to the TestTracking table along with 
+  basic views that join DBQL and Resusage tables to TestTracking to allow you to 
+  reference test detail logging by RunID instead of ranges of TimeStamps. 
+
+- The next script adds semantic level reporting views and macros over the basic views.
+  There is value add to these, however they are optional.
+
+- The last is a set of useful macros developed over the years for preparing and monitoring
+  the execution of benchmark tests. This is optional.
+
+You may not need to execute all of the steps. You may decide to come back and execute
+some steps later. If you decide to make changes to any of the views or macros,
+you should make a copy under a different name and make changes to the copy. 
+That way your modified views/macros won't overlaid if the steps above are re-run.
+

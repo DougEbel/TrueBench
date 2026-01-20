@@ -1,0 +1,52 @@
+------------------------- Help for exec setup_tdbench.tdb -------------------------
+
+This script creates the basic linkages for analyzing WHY you got performance results 
+rom workload tests. This must be run before setup_host_reporting.tdb which uses the 
+basic views.
+
+TdBench has built-in analysis capabilities with recording of test results from the view 
+of the client platform including client platform performance where TdBench is running 
+and the network connections to the host.  The host reporting capabilities show how long 
+the DBMS actually spent processing queries and whether they were impacted by the amount 
+of CPU, the amount of I/O, the distribution of work across parallel processes, or the 
+impact of competing workload.
+
+This reporting utilizes:
+
+TestTracking table
+   Contains the information about the test (name, description, runid) the precise 
+   timestamps on the host DBMS when the test started and stopped, along with information
+   about the platform configuration, software release, competing workload, and 
+   TASM settings in effect for the test. 
+
+TestStart macro
+   Is passed the RunID, test name, and description and creates a new row in the 
+   TestTracking Table with the precise host starting TimeStamp for the test.
+   This is invoked by the TdBench command BEFORE_RUN.
+
+TestStop macro
+   Is passed information about the number of queries executed and error count for a
+   RunID. The macro will update the TestTracking table with the information provided
+   along with the current host ending TimeStamp for the test. This is invoked by the
+   TdBench command AFTER_RUN.
+
+Basic views against most DBQL and ResUsage tables 
+   These have the same name as the DBC tables and contain a join to the TestTracking
+   table.  All of the DBC columns are included and selected columns from the TestTracking
+   table are added to allow you to find the rows created in a test with the constraint:
+      where RunID  = 123 
+   or comparing 2 or more tests with
+      where RunID in (123, 987, ...)
+
+The basic setup includes the definition of functions supporting the extracting
+of query name and query step names from the query text and calculating the 
+difference between 2 timestamps when the difference is greater than 9999 seconds (2.7 hours).
+
+For teradata_lake, there is also a definition of the DBQLOGV_Sum which collapses multiple 
+rows for a query executed across multiple clusters into a single row. That view
+does not include a join against TestTracking so that it can be used for analysis
+of data outside of the bounds of a test.  The RptTestCluster reporting view
+does apply the RunID for constraining data within the bounds of a test. 
+
+For help on the TdBench commands referenced above, exit SETUP and issue help [ command ]
+

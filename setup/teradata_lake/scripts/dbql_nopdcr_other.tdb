@@ -1,0 +1,20 @@
+# parms dbqlogtbl otherdbql
+echo View ${TdBenchDb}.:i1 joins ${TdBenchDb}.DBQLOGV_TT and TD_Metric_SVC.:i1
+sql text:temp/dbql_temp.sql ${TdBenchServer} delim=eof
+select Qtext from (
+select 10 (named Qseq, integer, title ''), 'replace view ' || '${TdBenchDb}' || '.' || ':i1' || ' as'  (named Qtext, varchar(120), title '') from ${TdBenchDb}.onerow  union
+select 20, 'select tt.*'  from ${TdBenchDb}.onerow union
+select 10000+dbc.columnid, ', qlt.' || dbc.columnname
+    from dbc.ColumnsV dbc
+    where dbc.databasename = 'TD_METRIC_SVC'
+       and dbc.tablename = ':i1'
+    and columnname not in (select columnname from dbc.columns where databasename = '${TdBenchDb}' and tablename = 'DBQLOGV_TT')
+ union
+select 20000, 'from  ${TdBenchDb}' || '.DBQLOGV_TT tt' from ${TdBenchDb}.onerow union
+select 20005, ' join TD_METRIC_SVC.' || ':i1' || ' qlt on tt.parentqueryid = qlt.parentqueryid ' from ${TdBenchDb}.onerow union
+select 20010, ' and tt.path_year = qlt.Path_Year and tt.path_month = qlt.path_month and tt.path_day = qlt.path_day' from ${TdBenchDb}.onerow
+) x order by Qseq;
+eof
+
+sql ${TdBenchServer} temp/dbql_temp.sql
+sql ${TdBenchServer} comment on ${TdBenchDb}.:i1  as 'TdBench testtracking extensions to TD_METRIC_SVC.:i1 with no PDCR'; 

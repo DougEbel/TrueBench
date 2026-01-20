@@ -1,0 +1,93 @@
+@echo off
+# ----------------------------------------------------------------------
+# querylog_base_view.tdb
+#
+# This example creates a base view to join TrueBench TestTracking to IBM Db2
+# monitoring data. It may need editing based on the DBMS release, edition,
+# and platform options selected.
+#
+# Multiple versions of query monitoring/logging exist across Db2 deployments.
+# This sample is based on Db2 LUW / Db2 Warehouse monitoring views.
+#
+# Even with that base view, revisions may be required depending on your
+# current DBMS version, logging configuration, and privileges.
+#
+# View created:
+#   :bench_schema.QueryLog_Base
+#
+# Purpose:
+# - Provide a stable base view for reporting by RunId and QueryName
+# - Avoid embedding complex query log join logic in README.md examples
+#
+# Notes:
+# - Db2 monitoring sources may be current-only unless an event monitor is enabled.
+# - QueryName is extracted from QueryText when insert_query_name=yes embeds:
+#     tdb=<qname> via the TrueBench PROFILE command
+# ----------------------------------------------------------------------
+
+include prompt_for_db.tdb
+if :setup_error is set then goto end_script
+
+echo Creating view :bench_schema.QueryLog_Base ...
+
+sql :bench_server delim=eof
+
+create or replace view :bench_schema.QueryLog_Base as
+select
+    tt.RunId,
+    tt.TestName,
+    tt.Description,
+    tt.StartTime as TestStartTime,
+    tt.StopTime  as TestStopTime,
+
+    -- Db2 identifiers / context
+    m.appl_id        as ApplicationId,
+    m.session_auth_id as UserName,
+    m.client_applname as ClientAppName,
+    m.client_wrkstnname as ClientWorkstation,
+
+    -- Timing
+    m.activity_start_time as QueryStartTime,
+    m.activity_end_time   as QueryEndTime,
+
+    -- SQL text
+    m.stmt_text as QueryText,
+
+    -- Extract QueryName from embedded identifier inserted by TrueBench
+    -- Expected string pattern: tdb=<qname>
+    case
+      when locate('tdb=', m.stmt_text) > 0 then
+        substr(
+          m.stmt_text,
+          locate('tdb=', m.stmt_text) + 4,
+          case
+            when locate(' ', m.stmt_text, locate('tdb=', m.stmt_text) + 4) > 0 then
+              locate(' ', m.stmt_text, locate('tdb=', m.stmt_text) + 4)
+              - (locate('tdb=', m.stmt_text) + 4)
+            when locate('*/', m.stmt_text, locate('tdb=', m.stmt_text) + 4) > 0 then
+              locate('*/', m.stmt_text, locate('tdb=', m.stmt_text) + 4)
+              - (locate('tdb=', m.stmt_text) + 4)
+            else
+              128
+          end
+        )
+      else null
+    end as QueryName,
+
+    -- Performance / resource metrics (best-effort; depends on monitoring source)
+    m.total_cpu_time as CpuTimeMicrosec,
+    m.rows_returned  as RowsReturned
+
+from
+    :bench_schema.TestTracking tt
+join
+    sysibmadm.mon_current_sql m
+  on
+    m.activity_start_time between tt.StartTime and tt.StopTime
+;
+
+eof
+
+if :errorcode != 0 then echo ERROR - creation of :bench_schema.QueryLog_Base failed
+
+label end_script

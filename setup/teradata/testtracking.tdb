@@ -1,0 +1,27 @@
+@echo off
+echo Creating Testtracking table.
+
+include prompt_for_db.tdb
+if :setup_error is set then goto end_script
+
+sql :bench_server delim=eof
+CREATE SET TABLE :bench_schema.TestTracking 
+ (
+	RunId SMALLINT,
+	TestName VARCHAR(50) CHARACTER SET LATIN NOT CASESPECIFIC,
+	Description VARCHAR(100) CHARACTER SET LATIN NOT CASESPECIFIC,
+	StartTime TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
+	StopTime TIMESTAMP(6),
+	QueriesExecuted INTEGER,
+	ErrorCount INTEGER,
+	ZeroRowCount INTEGER,
+	WorkerCount INTEGER,
+	Notes VARCHAR(8000) CHARACTER SET LATIN NOT CASESPECIFIC)
+UNIQUE PRIMARY INDEX ( RunId);
+Comment on table :bench_schema.TestTracking as 'Table to save start and stop timestamps for each run';
+eof
+
+if :errorcode != 0 then echo ERROR - the creation of the :bench_schema.TestTracking failed
+
+label end_script
+

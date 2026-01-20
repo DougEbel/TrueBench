@@ -1,0 +1,97 @@
+@echo off
+# ----------------------------------------------------------------------
+# querylog_base_view.tdb
+#
+# This example creates a base view to join TrueBench TestTracking to Amazon
+# Redshift query history and performance data. It may need editing based on
+# the DBMS release and platform options selected.
+#
+# View created:
+#   :bench_schema.QueryLog_Base
+#
+# Purpose:
+# - Provide a stable base view for reporting by RunId and QueryName
+# - Avoid embedding complex query log join logic in README.md examples
+#
+# Notes:
+# - Query log sources and retention vary by platform configuration.
+# - QueryName is extracted from QueryText when insert_query_name=yes embeds:
+#     tdb=<qname> via the TrueBench PROFILE command
+# ----------------------------------------------------------------------
+
+include prompt_for_db.tdb
+if :setup_error is set then goto end_script
+
+echo Creating view :bench_schema.QueryLog_Base ...
+
+sql :bench_server delim=eof
+
+create or replace view :bench_schema.QueryLog_Base as
+select
+    tt.RunId,
+    tt.TestName,
+    tt.Description,
+    tt.StartTime as TestStartTime,
+    tt.StopTime  as TestStopTime,
+
+    -- Redshift identifiers
+    q.query as QueryId,
+    q.userid as UserId,
+
+    -- Timing
+    q.starttime as QueryStartTime,
+    q.endtime   as QueryEndTime,
+
+    -- SQL text (as captured by STL_QUERYTEXT)
+    qt.sequence as QueryTextSeq,
+    qt.text     as QueryText,
+
+    -- Extract QueryName from embedded identifier inserted by TrueBench
+    -- Expected string pattern: tdb=<qname>
+    case
+      when position('tdb=' in qt.text) > 0 then
+        substring(
+          qt.text,
+          position('tdb=' in qt.text) + 4,
+          case
+            when position(' ' in substring(qt.text, position('tdb=' in qt.text) + 4) || ' ') > 0 then
+              position(' ' in substring(qt.text, position('tdb=' in qt.text) + 4) || ' ') - 1
+            else 128
+          end
+        )
+      else null
+    end as QueryName,
+
+    -- Performance / resource metrics
+    q.elapsed  as ElapsedMicrosec,
+    q.aborted  as AbortedFlag,
+    q.error    as ErrorCode,
+    q.label    as QueryLabel,
+
+    -- From STL_WLM_QUERY (queue and service class context)
+    w.service_class as ServiceClass,
+    w.slot_count    as SlotCount,
+    w.total_queue_time as TotalQueueTimeMicrosec,
+    w.total_exec_time  as TotalExecTimeMicrosec
+
+from
+    :bench_schema.TestTracking tt
+join
+    stl_query q
+  on
+    q.starttime between tt.StartTime and tt.StopTime
+join
+    stl_querytext qt
+  on
+    qt.query = q.query
+left join
+    stl_wlm_query w
+  on
+    w.query = q.query
+;
+
+eof
+
+if :errorcode != 0 then echo ERROR - creation of :bench_schema.QueryLog_Base failed
+
+label end_script

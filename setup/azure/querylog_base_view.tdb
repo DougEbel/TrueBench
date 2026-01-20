@@ -1,0 +1,106 @@
+@echo off
+# ----------------------------------------------------------------------
+# querylog_base_view.tdb
+#
+# This example creates a base view joining TrueBench TestTracking to SQL Server Query Store.
+# You may need to edit this script based on:
+# - Azure SQL / SQL Server release differences
+# - Query Store configuration and retention settings
+# - required permissions to access Query Store system views
+#
+# View created:
+#   :bench_schema.QueryLog_Base
+#
+# Purpose:
+# - Provide a stable base view for reporting by RunId and QueryName
+# - Avoid embedding complex Query Store join logic in README.md examples
+#
+# Notes:
+# - Query Store runtime stats are aggregated (interval/plan). This is not a row-per-exec log.
+# - QueryName is extracted from QueryText when insert_query_name=yes embeds: tdb=<qname>
+# ----------------------------------------------------------------------
+
+include prompt_for_db.tdb
+if :setup_error is set then goto end_script
+
+echo Creating view :bench_schema.QueryLog_Base ...
+
+sql :bench_server delim=eof
+
+create or alter view :bench_schema.QueryLog_Base as
+select
+    tt.RunId,
+    tt.TestName,
+    tt.Description,
+    tt.StartTime as TestStartTime,
+    tt.StopTime  as TestStopTime,
+
+    -- Query Store identifiers
+    q.query_id as QueryId,
+    p.plan_id  as PlanId,
+
+    -- Interval timing (Query Store aggregation intervals)
+    rsi.start_time as IntervalStartTime,
+    rsi.end_time   as IntervalEndTime,
+
+    -- SQL text (human-readable identity for the benchmark query)
+    qt.query_sql_text as QueryText,
+
+    -- Extract QueryName from embedded identifier inserted by TrueBench
+    -- Expected string pattern: tdb=<qname>
+    case
+      when charindex('tdb=', qt.query_sql_text) > 0 then
+        substring(
+          qt.query_sql_text,
+          charindex('tdb=', qt.query_sql_text) + 4,
+          case
+            when charindex(' ', qt.query_sql_text, charindex('tdb=', qt.query_sql_text) + 4) > 0 then
+              charindex(' ', qt.query_sql_text, charindex('tdb=', qt.query_sql_text) + 4)
+              - (charindex('tdb=', qt.query_sql_text) + 4)
+            when charindex('*/', qt.query_sql_text, charindex('tdb=', qt.query_sql_text) + 4) > 0 then
+              charindex('*/', qt.query_sql_text, charindex('tdb=', qt.query_sql_text) + 4)
+              - (charindex('tdb=', qt.query_sql_text) + 4)
+            else
+              128
+          end
+        )
+      else null
+    end as QueryName,
+
+    -- Execution metrics (Query Store runtime stats)
+    rs.count_executions as ExecCnt,
+    rs.avg_duration     as AvgDurationMicrosec,
+    rs.avg_cpu_time     as AvgCpuMicrosec,
+    rs.avg_logical_io_reads    as AvgLogicalReads,
+    rs.avg_physical_io_reads   as AvgPhysicalReads,
+    rs.avg_logical_io_writes   as AvgLogicalWrites
+
+from
+    :bench_schema.TestTracking tt
+join
+    sys.query_store_runtime_stats_interval rsi
+  on
+    rsi.start_time between tt.StartTime and tt.StopTime
+join
+    sys.query_store_runtime_stats rs
+  on
+    rs.runtime_stats_interval_id = rsi.runtime_stats_interval_id
+join
+    sys.query_store_plan p
+  on
+    p.plan_id = rs.plan_id
+join
+    sys.query_store_query q
+  on
+    q.query_id = p.query_id
+join
+    sys.query_store_query_text qt
+  on
+    qt.query_text_id = q.query_text_id
+;
+
+eof
+
+if :errorcode != 0 then echo ERROR - creation of :bench_schema.QueryLog_Base failed
+
+label end_script

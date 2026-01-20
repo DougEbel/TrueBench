@@ -1,0 +1,183 @@
+trace clear
+echo Setting up host reporting on ${TdBenchServer} in ${TdBenchDb}
+sql  ${TdBenchServer} delim=eof
+locking row for access select tablename from dbc.tables 
+where tablename = 'TdBenchInfo' and databasename = '${TdBenchDb}';
+eof
+if :retcode < 0 then goto logon_error
+if :retcode > 0 then goto benchmark_rights_missing
+if :linecnt > 0 then goto HaveInfoTbl
+
+sql ${TdBenchServer} delim=eof
+Create set table ${TdBenchDb}.TdBenchInfo
+  (InfoKey varchar(30),
+   InfoData varchar(256))
+Unique primary index(InfoKey);
+eof
+if :retcode > 0 then goto db_missing
+
+label HaveInfoTbl
+sql ${TdBenchServer} delim=eof
+update ${TdBenchDb}.TdBenchInfo set InfoData = '${TdBenchPrefix}'
+where InfoKey = 'PREFIX' else insert into ${TdBenchDb}.TdBenchInfo values('PREFIX','${TdBenchPrefix}');
+update ${TdBenchDb}.TdBenchInfo set InfoData = '${TdBenchVersion}'
+where InfoKey = 'VERSION' else insert into ${TdBenchDb}.TdBenchInfo values('VERSION','${TdBenchVersion}');
+eof
+if :retcode > 0 then goto db_rights_missing
+
+sql ${TdBenchServer} delim=eof
+locking row for access select tablename from dbc.tables
+where tablename = 'OneRow' and databasename = '${TdBenchDb}';
+eof
+if :linecnt > 0 then goto HaveOneRow
+
+sql ${TdBenchServer} delim=eof
+CREATE SET TABLE  ${TdBenchDb}.OneRow 
+     (
+      acol INTEGER)
+PRIMARY INDEX ( acol );
+insert into ${TdBenchDb}.onerow values(1);
+comment on table  ${TdBenchDb}.onerow as 'A table with one row for use in union statements that must reference a table when selecting constan
+ts';
+eof
+
+label HaveOneRow
+
+echo Creating functions
+sql ${TdBenchServer} delim=eof
+REPLACE FUNCTION ${TdBenchDb}.ExtractBenchQname (BenchInfo VARCHAR(500))
+RETURNS VARCHAR(500)
+LANGUAGE SQL
+CONTAINS SQL
+DETERMINISTIC
+RETURNS NULL ON NULL INPUT
+SQL SECURITY DEFINER
+COLLATION INVOKER
+INLINE TYPE 1
+RETURN
+case
+when BenchInfo like '%exec %benchmark%' or BenchInfo like '%call %benchmark%' then
+   regexp_substr(
+      regexp_substr(BenchInfo,'(?<=benchmark\.)(.*?)(?=[\s|;|\(])', 1,1,'i'),
+   '(.*?)(?=\.|$)')
+  when BenchInfo like '%tdb=%' then
+    regexp_substr(
+      regexp_substr(BenchInfo,'(?<=tdb=)(.*?)(?=[;|\.\s|\*])', 1,1,'i'),
+   '(.*?)(?=\.|$)')
+else ''
+end;
+eof
+if :retcode != 0 then goto nofunctionrights
+
+sql ${TdBenchServer} comment on function ${TdBenchDb}.ExtractBenchQname as 'Extracts query name from ExtractBenchInfo function';
+
+sql ${TdBenchServer} delim=eof
+REPLACE FUNCTION ${TdBenchDb}.ExtractBenchQSubname (BenchInfo VARCHAR(500))
+RETURNS VARCHAR(500)
+LANGUAGE SQL
+CONTAINS SQL
+DETERMINISTIC
+RETURNS NULL ON NULL INPUT
+SQL SECURITY DEFINER
+COLLATION INVOKER
+INLINE TYPE 1
+RETURN
+case
+when BenchInfo like '%tdb%=%' then
+    regexp_substr(
+      regexp_substr(BenchInfo,'(?<=tdb=)(.*?)(?=[;|\s|\*])', 1,1,'i'),
+   '(?<=\.)(.*?)(?=\*|$)')
+else ''
+end;
+eof
+
+sql ${TdBenchServer} comment on function ${TdBenchDb}.ExtractBenchQSubname as 'Extracts query subname from ExtractBenchInfo function ';
+
+sql ${TdBenchServer} delim=eof
+REPLACE FUNCTION ${TdBenchDb}.TimestampSubtract (FirstTime TIMESTAMP, SecondTime TIMESTAMP)
+RETURNS FLOAT
+LANGUAGE SQL
+CONTAINS SQL
+DETERMINISTIC
+RETURNS NULL ON NULL INPUT
+SQL SECURITY DEFINER
+COLLATION INVOKER
+INLINE TYPE 1
+RETURN
+        ((FirstTime - SecondTime HOUR(4)) (FLOAT)) * 3600. +
+        ((FirstTime - ((FirstTime - SecondTime HOUR(4) )) - SecondTime SECOND(4) ) (FLOAT));
+
+eof
+
+sql ${TdBenchServer} comment on function ${TdBenchDb}.TimestampSubtract as 'Subtracts 2nd timestamp from 1st timestamp giving seconds ';
+
+echo Setting up base views 
+include setup/teradata_lake/scripts/testtracking.tdb
+include setup/teradata_lake/scripts/teststart.tdb
+include setup/teradata_lake/scripts/teststop.tdb
+
+
+label dbconly
+echo Setting up views against DBQL and Resusage tables in TD_Metric_SVC
+sql ${TdBenchServer} setup/teradata_lake/scripts/dbqlogv_sum.sql
+if :retcode != 0 then goto NoMetricRights
+
+include setup/teradata_lake/scripts/dbql_nopdcr.tdb DBQLOGV
+include setup/teradata_lake/scripts/dbql_nopdcr_other.tdb DBQLSQLV
+include setup/teradata_lake/scripts/dbql_nopdcr_other.tdb DBQLOBJV
+include setup/teradata_lake/scripts/dbql_nopdcr_other.tdb DBQLSTEPV
+include setup/teradata_lake/scripts/dbql_nopdcr_other.tdb DBQLEXPLAINV
+include setup/teradata_lake/scripts/findtable.tdb dbc DBQLPARAMV
+if :linecnt > 0 then include setup/teradata_lake/scripts/dbql_nopdcr_other.tdb DBQLPARAMV
+# NOTE - DBQLUTILITY view has not been converted for Teradata_lake
+# include setup/teradata_lake/scripts/findtable.tdb dbc DBQLUTILITYV
+# if :linecnt > 0 then include setup/teradata_lake/scripts/dbql_nopdcr_util.tdb DBQLUTILITYV
+
+
+# ResUsageIpma
+# ResUsageIvpr
+include setup/teradata_lake/scripts/resusage_nopdcr.tdb ResUsageSawtV
+include setup/teradata_lake/scripts/resusage_nopdcr.tdb ResUsageScpuV
+include setup/teradata_lake/scripts/resusage_nopdcr.tdb ResUsageShstV
+include setup/teradata_lake/scripts/resusage_nopdcr.tdb ResUsageSldvV
+include setup/teradata_lake/scripts/resusage_nopdcr.tdb ResUsageSmhmV
+include setup/teradata_lake/scripts/resusage_nopdcr.tdb ResUsageSpdskV
+include setup/teradata_lake/scripts/resusage_nopdcr.tdb ResUsageSpmaV
+include setup/teradata_lake/scripts/resusage_nopdcr.tdb ResUsageSpsV
+include setup/teradata_lake/scripts/resusage_nopdcr.tdb ResUsageSvdskV
+include setup/teradata_lake/scripts/resusage_nopdcr.tdb ResUsageSvprV
+
+goto setup_dbms_end
+
+label logon_error
+echo ERROR - the logon information provided on the DB alias in tdbench_${TdBench_DBMS}.tdb is incorrect
+goto setup_dbms_end
+
+label nofunctionrights
+echo ERROR - ${TdBenchDb} has not been granted the rights to create functions
+got setup_dbms_end
+
+label benchmark_rights_missing
+echo ERROR - unable to access ${TdBenchDb}. Please validate the grants or specified database to use. 
+goto setup_dbms_end
+
+label db_missing
+echo ERROR - The value of TdBenchDb in tdbench_teradata.sh or tdbench_teradata.bat may not be valid. Current setting: ${TdBenchDb}
+goto setup_dbms_end
+
+label db_rights_missing
+echo ERROR - unable to create tables/views/functions in ${TdBenchDb}.  Please grant appropriate rights.
+goto setup_dbms_end
+
+label NoMetricRights
+echo ERROR - unable to create views against TD_Metric_SVC. Please grant select with grant option to ${TdBenchDb}
+
+label had_setup_error
+echo ERROR - The inistallation of the DBMS reporting package is incomplete due to errors
+
+label setup_dbms_end
+if :os != Windows then os if [ -e logs/teradata_setup.log ]; then rm logs/teradata_setup.log; else echo; fi
+if :os = Windows then os if EXIST logs\\teradata_setup.log erase logs\\teradata_setup.log
+
+trace save logs/teradata_setup.log
+

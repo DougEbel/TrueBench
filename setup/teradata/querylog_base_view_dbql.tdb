@@ -1,0 +1,20 @@
+@echo off
+include prompt_for_db.tdb
+if :setup_error is set then goto end_script
+
+set eyecatch = -----------------
+echo :eyecatch Creating :i1 base view :eyecatch 
+sql :bench_server delim=eof
+replace view :bench_schema.:i1 as
+select tt.RunId, tt.TestName, tt.StartTime as TestStart,
+qlo.*,
+cast(ql.collecttimestamp as date) LogDate
+from dbc.:i1 qlo join dbc.dbqlogtbl ql 
+  on qlo.queryid = ql.queryid
+join :bench_schema.testtracking tt 
+  on ql.starttime between tt.StartTime and tt.StopTime;
+
+COMMENT ON VIEW :bench_schema.:i1 AS :i2;
+eof
+
+label end_script

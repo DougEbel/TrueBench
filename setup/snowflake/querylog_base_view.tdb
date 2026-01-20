@@ -1,0 +1,90 @@
+@echo off
+# ----------------------------------------------------------------------
+# querylog_base_view.tdb
+#
+# This example creates a base view to join TrueBench TestTracking to Snowflake
+# query history. It may need editing based on the DBMS release and platform
+# options selected.
+#
+# View created:
+#   :bench_schema.QueryLog_Base
+#
+# Purpose:
+# - Provide a stable base view for reporting by RunId and QueryName
+# - Avoid embedding complex query log join logic in README.md examples
+#
+# Notes:
+# - Query log sources and retention vary by platform configuration.
+# - QueryName is extracted from QueryText when insert_query_name=yes embeds:
+#     tdb=<qname> via the TrueBench PROFILE command
+# ----------------------------------------------------------------------
+
+include prompt_for_db.tdb
+if :setup_error is set then goto end_script
+
+echo Creating view :bench_schema.QueryLog_Base ...
+
+sql :bench_server delim=eof
+
+create or replace view :bench_schema.QueryLog_Base as
+select
+    tt.RunId,
+    tt.TestName,
+    tt.Description,
+    tt.StartTime as TestStartTime,
+    tt.StopTime  as TestStopTime,
+
+    -- Snowflake identifiers
+    qh.query_id as QueryId,
+    qh.session_id as SessionId,
+    qh.user_name as UserName,
+    qh.warehouse_name as WarehouseName,
+    qh.database_name as DatabaseName,
+    qh.schema_name as SchemaName,
+
+    -- Timing
+    qh.start_time as QueryStartTime,
+    qh.end_time   as QueryEndTime,
+
+    -- SQL text
+    qh.query_text as QueryText,
+
+    -- Extract QueryName from embedded identifier inserted by TrueBench
+    -- Expected string pattern: tdb=<qname>
+    case
+      when position('tdb=' in qh.query_text) > 0 then
+        substring(
+          qh.query_text,
+          position('tdb=' in qh.query_text) + 4,
+          case
+            when position(' ' in substring(qh.query_text, position('tdb=' in qh.query_text) + 4) || ' ') > 0 then
+              position(' ' in substring(qh.query_text, position('tdb=' in qh.query_text) + 4) || ' ') - 1
+            else 128
+          end
+        )
+      else null
+    end as QueryName,
+
+    -- Performance / resource metrics
+    qh.execution_time as ExecutionTimeMillisec,
+    qh.rows_produced  as RowsProduced,
+    qh.bytes_scanned  as BytesScanned,
+    qh.bytes_written  as BytesWritten,
+
+    -- Status / error
+    qh.error_code as ErrorCode,
+    qh.error_message as ErrorMessage
+
+from
+    :bench_schema.TestTracking tt
+join
+    snowflake.account_usage.query_history qh
+  on
+    qh.start_time between tt.StartTime and tt.StopTime
+;
+
+eof
+
+if :errorcode != 0 then echo ERROR - creation of :bench_schema.QueryLog_Base failed
+
+label end_script

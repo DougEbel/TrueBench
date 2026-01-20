@@ -1,0 +1,105 @@
+@echo off
+set eyecatch = -----------------
+
+echo :eyecatch Creating Reporting Functions :eyecatch 
+
+include prompt_for_db.tdb
+if :setup_error is set then goto end_script
+
+sql :bench_server select 'grant function on :bench_schema to ' || trim(user) (title ''); > temp\temp.tdb
+if :errorcode != 0 then goto end_script
+sql :bench_server temp\temp.tdb
+if :errorcode != 0 then goto end_script
+
+sql :bench_server delim=eof
+
+REPLACE FUNCTION :bench_schema.ExtractBenchQname (BenchInfo VARCHAR(500))
+RETURNS VARCHAR(128)
+LANGUAGE SQL
+CONTAINS SQL
+DETERMINISTIC
+RETURNS NULL ON NULL INPUT
+SQL SECURITY DEFINER
+COLLATION INVOKER
+INLINE TYPE 1
+RETURN
+CASE
+
+  /* ------------------------------------------------------------ */
+  /* 1)  tdb=QNAME                                                */
+  /* ------------------------------------------------------------ */
+  WHEN POSITION('tdb=' IN BenchInfo) > 0 THEN
+    SUBSTRING(
+      BenchInfo
+      FROM POSITION('tdb=' IN BenchInfo) + 4
+      FOR
+        POSITION(' ' IN
+          SUBSTRING(
+            BenchInfo
+            FROM POSITION('tdb=' IN BenchInfo) + 4
+          ) || ' '
+        ) - 1
+    )
+
+  /* ------------------------------------------------------------ */
+  /* 2) exec QNAME                                                */
+  /* ------------------------------------------------------------ */
+  WHEN POSITION('exec ' IN LOWER(BenchInfo)) > 0 THEN
+    SUBSTRING(
+      BenchInfo
+      FROM POSITION('exec ' IN LOWER(BenchInfo)) + 5
+      FOR
+        POSITION(' ' IN
+          SUBSTRING(
+            LOWER(BenchInfo)
+            FROM POSITION('exec ' IN LOWER(BenchInfo)) + 5
+          ) || ' '
+        ) - 1
+    )
+
+  /* ------------------------------------------------------------ */
+  /* 3) call QNAME                                                */
+  /* ------------------------------------------------------------ */
+  WHEN POSITION('call ' IN LOWER(BenchInfo)) > 0 THEN
+    SUBSTRING(
+      BenchInfo
+      FROM POSITION('call ' IN LOWER(BenchInfo)) + 5
+      FOR
+        POSITION(' ' IN
+          SUBSTRING(
+            LOWER(BenchInfo)
+            FROM POSITION('call ' IN LOWER(BenchInfo)) + 5
+          ) || ' '
+        ) - 1
+    )
+
+  ELSE NULL
+END;
+eof
+if :errorcode != 0 then goto no_function_rights
+
+sql :bench_server COMMENT ON FUNCTION :bench_schema.ExtractBenchQname as 'Extracts query name from ExtractBenchInfo function';
+
+sql :bench_server delim=eof
+REPLACE FUNCTION :bench_schema.TimestampSubtract (FirstTime TIMESTAMP, SecondTime TIMESTAMP)
+RETURNS FLOAT
+LANGUAGE SQL
+CONTAINS SQL
+DETERMINISTIC
+RETURNS NULL ON NULL INPUT
+SQL SECURITY DEFINER
+COLLATION INVOKER
+INLINE TYPE 1
+RETURN
+	((FirstTime - SecondTime HOUR(4)) (FLOAT)) * 3600. +
+	((FirstTime - ((FirstTime - SecondTime HOUR(4) )) - SecondTime SECOND(4) ) (FLOAT));
+
+COMMENT ON FUNCTION :bench_schema.TimestampSubtract AS 'Time#1 - Time#2 in seconds'
+eof
+
+goto end_script
+
+label no_function_rights
+echo ERROR - Got error on creating function.  User may not have create function rights on :bench_schema
+
+label end_script

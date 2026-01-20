@@ -1,0 +1,64 @@
+@# TDBench 8.00 - Copyright (c) 2010, 2011, 2013, 2015, 2016, 2018, 2019, 2020, 2024 Teradata Corporation
+echo text:temp/teststop.sql delim=eof
+Replace macro ${TdBenchDb}.TestStop(pRunID Smallint default null, pClientRunID Smallint default null,
+   pResultCount integer default null, pErrorCount integer default null) as (
+
+update ${TdBenchDb}.testtracking from
+  (select 1 one) onerow,
+  (select max(runid) as LastRunID from ${TdBenchDb}.testtracking) tt,
+  (select max(runid) as MaxRunid_client from ${TdBenchDb}.testtracking tt where ClientRunid = :pClientRunID) ttc,
+  (select sum(case when substring(ProfileName from 1 for character_length(InfoData)) = InfoData then 1 else 0 end) as WorkersOnAtEnd,
+        sum(case when substring(ProfileName from 1 for character_length(InfoData)) = InfoData or ProfileName is null then 1 else 0 end) as NonWorkersOnAtEnd
+        from dbc.sessioninfo, ${TdBenchDb}.tdbenchinfo where InfoKey='PREFIX' ) as si,
+eof
+
+sql file:null ${TdBenchServer} delim=eof
+replace view ${TdBenchDb}.testviewrights as
+select  count(*) as nodes,
+ sum(case when status = 'U' then 1 else 0 end) as NodesUpAtStart,
+ average(cpuuse) as AverageNodeCpuAtStart
+ from table(syslib.monitorPhysicalResource()) as x;
+select * from ${TdBenchDb}.testviewrights;
+eof
+if :retcode = 0 then goto canrunsyslib
+echo WARNING - can not create macro contining monitoring via Syslib. ${TdBenchDb} needs execute function with grant option on syslib
+
+echo append:temp/teststop.sql (select null as nodes, null as NodesUpAtEnt, null as AverageNodeCpuAtEnd from ${TdBenchDb}.onerow) as mpr
+eof
+goto doupdate
+
+label canrunsyslib
+echo append:temp/teststop.sql delim=eof
+(select  count(*) as nodes,
+          sum(case when status = 'U' then 1 else 0 end) as NodesUpAtEnd,
+          average(cpuuse) as AverageNodeCpuAtEnd
+          from table(syslib.monitorPhysicalResource()) as x) as mpr
+eof
+
+label doupdate
+echo append:temp/teststop.sql delim=eof
+   set ActualStopTime = current_timestamp,
+   ReportingStopTime = coalesce(ReleaseExecTime 
+      + cast(case when reportingseconds > 9999 then reportingseconds - cast (reportingseconds / 3600 as integer) * 3600 else reportingseconds end as interval second(4))
+      + cast(case when reportingseconds > 9999 then cast (reportingseconds / 3600 as integer) else 0 end as interval hour(4))
+   ,current_timestamp),
+   NodesUpAtEnd =mpr.NodesUpAtEnd,
+   AverageNodeCpuAtEnd = mpr.AverageNodeCpuAtEnd,
+   WorkersOnAtEnd = si.WorkersOnAtEnd,
+   NonWorkersOnAtEnd = si.NonWorkersOnAtEnd,
+   ResultCount=:pResultCount,
+   ErrorCount=:pErrorCount
+   where (:pClientRunId is null and runid =tt.LastRunID) or (:pClientRunID is not Null and runid = MaxRunid_client)\;
+   select 'Host DBMS Run #' || runid || ' ran from ' || (ReleaseExecTime (varchar(25))) || ' to '  || (actualstoptime (varchar(25))) (title 'TestStop Execution Result') from ${TdBenchDb}.testtracking
+   where (:pClientRunid is null and :pRunID is null and runid in  (select max(runid) from ${TdBenchDb}.testtracking))
+   or (:pClientRunID is not Null  and RunID in (select max(runid) from ${TdBenchDb}.testtracking where ClientRunid = :pClientRunID))
+   or (:pRunID is not null and RunID = :pRunID)
+   \;  );
+comment on ${TdBenchDb}.TestStop as 'Update the recent row in TestTracking with actual stop time and environmental metadata';
+drop view ${TdBenchDb}.testviewrights;
+eof
+
+sql ${TdBenchServer} temp/teststop.sql
+
+label endteststop
+

@@ -1,0 +1,95 @@
+set suf = .sh
+if :os = Windows then set suf = .bat
+
+if tdbench_:i1.tdb not exists then goto askoverlay
+read ans=no Type yes if you only want prompting to add another DB statement to tdbench_:i1.tdb:
+if :ans = yes then goto promptDB
+
+label askoverlay
+
+set fn = tdbench_config:suf
+if :fn not exists then goto copy1
+read ans=no You currently have a :fn. Type "yes" to overlay it:
+if :ans = yes then goto copy1
+echo since you entered :ans, your current :fn was preserved
+goto copy1done
+label copy1
+if :os != Windows then os cp setup/:i1/templates/:fn .
+if :os = Windows then os copy setup\\:i1\\templates\\:fn .
+echo copied :fn
+label copy1done
+
+set fn = tdbench_:i1_config:suf
+if :fn not exists then goto copy2
+read ans=no You currently have a :fn. Type "yes" to overlay it:
+if :ans = yes then goto copy2
+echo since you entered :ans, your current :fn was preserved
+goto copy2done
+label copy2
+if :os != Windows then os cp setup/:i1/templates/:fn .
+if :os = Windows then os copy setup\\:i1\\templates\\:fn .
+echo copied :fn
+label copy2done
+
+
+set fn = tdbench.tdb
+if :fn not exists then goto copy3
+read ans=no You currently have a :fn. Type "yes" to overlay it:
+if :ans = yes then goto copy3
+echo since you entered :ans, your current :fn was preserved
+goto copy3done
+label copy3
+if :os != Windows then os cp setup/:i1/templates/:fn .
+if :os = Windows then os copy setup\\:i1\\templates\\:fn .
+echo copied :fn
+label copy3done
+
+set fn = tdbench_:i1.tdb
+if :fn not exists then goto copy4
+read ans=no You currently have a :fn. Type "yes" to overlay it:
+if :ans = yes then goto copy4
+echo since you entered :ans, your current :fn was preserved
+goto copy4done
+label copy4
+if :os != Windows then os cp setup/:i1/templates/:fn .
+if :os = Windows then os copy setup\\:i1\\templates\\:fn .
+echo copied :fn
+label copy4done
+
+if :retcode = 1 then echo NOTE: you currently do not have a defined DB definition to logon to Vantage
+read ans=no Type yes if you would like to be prompted in creating a DB statement:
+if :ans != yes then goto bypassDB
+
+label promptDB
+echo Defining DB statements ... listing existing definitions (if none, you will get error code = 1):
+if :os != Windows then os grep teradata:// tdbench_:i1.tdb
+if :os = Windows then os findstr "teradata://" tdbench_:i1.tdb
+echo delim=eof
+
+You will be asked to provide a URL or IP address, a logon ID and a password. You should have tested
+those with another client utility from this platform. 
+
+You may want to use the logon ID and password you intend to use for TdBench even if the user/database
+has not been created. Later in the setup process, we will ask you for the logon ID and password of
+the user with the privledges to create the TdBench user and the script will override what you respond now. 
+
+You may stop the process by typing quit
+eof
+read dbname=quit Enter the db-alias-name you want to give for this connection:
+if :dbname = quit then goto abortDB
+read url=quit Enter the IP address or URL that will connect you to the Vantage DBMS:
+if :url = quit then goto abortDB
+read logonid=quit username enter the user logon ID to logon to :url:
+if :logonid = quit then goto abortDB
+read password=quit enter the password for :logonid:
+if :password = quit then goto abortDB
+echo the final DB statement appended to tdbench_:i1.db:
+echo     db :dbname jdbc:teradata://:url :logonid :password
+echo append:tdbench_:i1.tdb db :dbname jdbc:teradata://:url :logonid :password
+goto bypassDB
+
+label abortDB
+echo No DB comamnd was added to tdbench_:i1.tdb
+
+label bypassDB
+echo copy_templates.tdb is complete. NOTE: you may need to restart TdBench to see the effects.

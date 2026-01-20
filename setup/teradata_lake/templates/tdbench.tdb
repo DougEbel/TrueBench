@@ -1,0 +1,18 @@
+@# This TdBench script file is run on every startup of TdBench
+@trace off
+
+@# ------------------- Multiple DBMS setup  -------------------
+@# If you will be testing against multiple DMBS's, common statements can be put in this file and 
+@# the DBMS specific statements in the tdbench_xxx.tdb file referenced below. 
+
+
+
+
+@# The ${TdBench_DBMS} is defaulted in tdbench_config.sh / tdbench_config.bat, depending on your platform.
+@# You can override the database with -d on the tdbench.sh command line.
+
+if tdbench_${TdBench_DBMS}.tdb exists then include tdbench_${TdBench_DBMS}.tdb
+
+@# For interactive usage on multiple platforms, the following will document what the current database settings are from -d
+echo Current settings: DBMS=${TdBench_DBMS} TdBenchServer=${TdBenchServer}  TdBenchDb=${TdBenchDb}  TdBenchPrefix=${TdBenchPrefix}
+@trace on

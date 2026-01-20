@@ -1,0 +1,254 @@
+@echo off
+# This script sets up reporting views against the enhanced query logging views. 
+
+include prompt_for_db.tdb
+if :setup_error is set then goto end_script
+
+echo -------------------- Creating  RptTestDetail reporting reporting view -------------------- 
+sql :bench_server delim=eof
+REPLACE VIEW :bench_schema.RptTestDetail as
+SELECT 
+ qlog.RunId
+ ,qlog.TestName
+ ,qlog.StartTime
+ ,qlog.SessionId  
+ ,case 
+     when querytext like '%exec%benchmark.%' or querytext like '%call%benchmark.%' or querytext like '%/*%tdb=%*/%' then :bench_schema.ExtractBenchQname(querytext)
+	 when queryband like '%tdb=%' then :bench_schema.ExtractBenchQname(queryband)
+	 else '' end as QueryName
+ ,:bench_schema.TimestampSubtract(qlog.FirstRespTime, qlog.StartTime) AS RunSecs
+ ,:bench_schema.TimestampSubtract(qlog.StartTime, qlog.TestStartTime) AS StartSecs
+ ,qlog.NumResultRows
+ ,qlog.TotalIoCount 
+ ,qlog.AmpCpuTime
+ ,qlog.ParserCPUTime
+ ,qlog.AmpCpuTime + qlog.ParserCpuTime AS CpuTime
+ ,qlog.SpoolUsage  
+ ,1 - qlog.AmpCpuTime/NULLIFZERO(qlog.NumOfActiveAmps * qlog.MaxAmpCpuTime) AS CpuSkew
+ ,1 - qlog.TotalIoCount/NULLIFZERO(qlog.NumOfActiveAmps * qlog.MaxAmpIo ) AS IoSkew
+ ,:bench_schema.TimestampSubtract(qlog.FirstStepTime, qlog.StartTime) AS ParseQueueSecs
+ ,qlog.QueryId  AS QueryId
+ ,qlog.ERRORCODE
+ ,qlog.ErrorText
+ ,'"' || oreplace(oreplace(substring(qlog.QueryText from 1 for 8000),  chr(10), ' '),'"',' ') || '"' AS QueryText
+ ,qlog.Username
+ ,qlog.CacheFlag
+, qlog.QueryBand
+, qlog.WDID
+, qlog.FinalWDID
+, qlog.TDWMEstTotalTime
+, qlog.RequestNum
+, qlog.InternalRequestNum
+, qlog.DelayTime
+, qlog.ReqIOKB
+, qlog.ReqPhysIO
+, qlog.ReqPhysIOKB
+FROM
+ :bench_schema.DBQLogTbl qlog
+;
+
+COMMENT ON VIEW :bench_schema.RptTestDetail AS 'Shows all queries running in context of a RunId. Use with constraints RunId=? or RunId IN ( ).';
+eof
+
+echo -------------------- Creating  RptTestDetail reporting view --------------------
+sql :bench_server delim=eof
+REPLACE VIEW :bench_schema.RptSumQueries AS 
+SELECT 
+	ql.RunId
+	,ql.QueryName
+	,ql.ERRORCODE
+	,COUNT(*) AS ExecCnt
+	,SUM(ql.RunSecs) AS SumRunSecs
+	,AVERAGE(ql.RunSecs) AS AveRunSecs
+	,MAX(ql.RunSecs) AS MaxRunSecs 
+	,SUM(ql.CPUTime) AS SumCpuTime
+	,100. * SUM(ql.CPUTime)/x.RunCpu AS CpuPctOfRun
+FROM 
+	:bench_schema.RptTestDetail ql
+	,(SELECT RunId AS SumRunId, SUM(CPUTime) AS RunCpu FROM :bench_schema.RptTestDetail GROUP BY 1) x
+WHERE 
+	ql.RunId = x.SumRunId
+GROUP BY 
+	1, 2, 3, 4, 5, x.RunCpu
+;
+
+COMMENT ON VIEW :bench_schema.RptSumQueries AS 'Provides summary by run of queries executed. You may want to constrain on RunId.';
+
+eof
+
+echo -------------------- Creating  RptTestSteps reporting view --------------------
+sql :bench_server delim=eof
+REPLACE VIEW  :bench_schema.RptTestSteps AS
+SELECT 
+	qlsteps.RunId
+	,qlsteps.TestName
+	,qlog.QueryName
+	,qlsteps.QueryId
+	,qlsteps.StepLev1Num + .1 * qlsteps.StepLev2Num (Decimal(4,1)) AS sNum
+	,qlsteps.StepName
+	,qlsteps.StepStartTime
+	,:bench_schema.TimestampSubtract(qlsteps.StepStartTime, qlog.StartTime) AS sStart
+	,:bench_schema.TimestampSubtract(qlsteps.StepStopTime, qlsteps.StepStartTime) AS sElapse
+  ,case when pctRun > .2 then 'Hi_CPU ' else '' end ||
+   case when RowVsEst < .3 or RowVsEst > 3 then 'Bad_Est ' else '' end ||
+   case when IOperCpuSec < 500 then 'Low_IO ' else '' end ||
+   case when IOperCpuSec > 3000 then 'Hi_IO ' else '' end ||
+   case when sElapse > 10 and CpuSkew > .3 then 'Skew ' else '' end (varchar(30)) as Issue
+	,sElapse/NULLIFZERO(qlog.RunSecs) AS pctRun
+	,qlsteps.EstProcTime
+	,qlsteps.CPUTime
+	,qlsteps.IOcount
+	,qlsteps.IOcount / NullIfZero(qlsteps.CpuTime) as IOperCpuSec
+	,qlsteps.RowCount
+	,qlsteps.RowCount/NULLIFZERO(qlsteps.EstRowCount) AS RowVsEst
+	,qlsteps.RowsWComprColumns/NULLIFZERO(qlsteps.RowCount) AS CompPct
+	,1 - qlsteps.CpuTime/NULLIFZERO(qlsteps.NumOfActiveAmps * qlsteps.MaxAmpCpuTime)  AS CpuSkew
+	,1 - qlsteps.SpoolUsage/NULLIFZERO(qlsteps.NumOfActiveAmps * qlsteps.MaxAmpSpool) AS SpoolSkew
+	,qlsteps.MaxCPUAmpNumber
+	,qlsteps.MaxSpoolAmpNumber
+FROM 
+	:bench_schema.RptTestDetail qlog join :bench_schema.DBQLStepTbl qlsteps
+	on qlog.QueryId = qlsteps.QueryId 
+;
+
+COMMENT ON VIEW :bench_schema.RptTestSteps AS 'Reports detailed steps for queries in a given RunId or queryname across RunIds.';
+eof
+
+echo -------------------- Creating  RptTestObjects reporting view --------------------
+sql :bench_server delim=eof
+REPLACE VIEW  :bench_schema.RptTestObjects AS
+SELECT 
+	qlog.QueryName
+	,qlobjects.*  
+FROM 
+	:bench_schema.RptTestDetail qlog join :bench_schema.DBQLObjTbl qlobjects
+  on qlog.QueryId = qlobjects.QueryId 
+;
+
+COMMENT ON VIEW :bench_schema.RptTestObjects AS 'Reports referenced objects for queries in a given RunId and/or queryname across RunIds.';
+eof
+
+echo -------------------- Creating  RptTestExplain reporting view --------------------
+sql :bench_server delim=eof
+REPLACE VIEW  :bench_schema.RptTestExplain AS
+SELECT
+	qlog.QueryName
+	,qlexp.*
+FROM 
+	:bench_schema.RptTestDetail qlog join :bench_schema.DBQLExplainTbl qlexp
+  on qlog.QueryId = qlexp.QueryId 
+;
+
+COMMENT ON VIEW :bench_schema.RptTestExplain AS 'Reports the EXPLAIN text for queries in a given RunId and/or queryname across RunIds.';
+eof
+
+echo -------------------- Creating  RptTestSQL reporting view --------------------
+sql :bench_server delim=eof
+REPLACE VIEW  :bench_schema.RptTestSQL AS
+SELECT 
+	ql.QueryName
+	,qlsql.*     
+FROM 
+	:bench_schema.RptTestDetail ql join :bench_schema.DBQLSqlTbl qlsql
+  on ql.QueryId = qlsql.QueryId 
+;
+
+COMMENT ON VIEW :bench_schema.RptTestSQL AS 'Extracts the complete SQL for a given RunId or query across RunIds.';
+eof
+
+echo -------------------- Creating  RptSumRuns reporting view --------------------
+sql :bench_server delim=eof
+REPLACE VIEW :bench_schema.RptSumRuns as
+select  runid
+,min(starttime)  (format 'YYYY-MM-DDBHH:MI:SS') as StartTime
+,testname (varchar(20))
+,case when username like '${TdBenchPrefix}%' then 'BenchUser' else 'OtherUser' end UserType
+,:bench_schema.timestampsubtract(max(starttime), min(starttime)) (format 'ZZZ,ZZZ') TestSecs
+, count(distinct queryname) (format 'ZZZ,ZZZ') NumScripts 
+, count(*) (format 'ZZZ,ZZZ') NumQueries
+,sum(case when errorcode = 0 or errorcode = 3158 then 1 else 0 end) (format 'ZZZ,ZZZ') NumNoErrors
+,sum(RunSecs) (format 'ZZZ,ZZZ') SumRunSecs
+,average(RunSecs) (format 'ZZZ,ZZZ') AveRunSecs
+,sum(AmpCpuTime) (format 'ZZZ,ZZZ') SumAmpCpu
+,sum(ParserCpuTime) (format 'ZZZ,ZZZ') SumParserCpu
+,sum(TotalIoCount) (format 'ZZZ,ZZZ,ZZZ,ZZZ')SumIOCount
+,Sum(SpoolUsage) (format 'ZZZ,ZZZ,ZZZ,ZZZ,ZZZ') SumSpool 
+from :bench_schema.RptTestDetail 
+group by 1,3,4;
+
+comment on view :bench_schema.RptSumRuns as 'Summarizes query execution statistics by benchmark users vs others across RunIds.';
+eof
+
+echo -------------------- Creating  RptSumErrors reporting view --------------------
+sql :bench_server delim=eof
+REPLACE VIEW  :bench_schema.RptSumErrors AS
+SELECT
+	ql.RunId
+	,ql.TestName
+	,ql.ERRORCODE
+	,case when username like '${TdBenchPrefix}%' then 'BenchUser' else 'OtherUser' end UserType
+	,CAST (CASE WHEN QueryName IS NULL THEN 'Other'
+		ELSE 'Benchmark' END AS VARCHAR(10)) AS StmtGroup  
+	,COUNT(*) AS ExecCnt
+	,SUM( ql.RunSecs ) AS TotRunSecs
+	,TotRunSecs/ExecCnt AS AveResp
+	,SUM(CpuTime) AS CpuTime
+	,ql.ErrorText
+FROM 
+   :bench_schema.RptTestDetail ql
+GROUP BY 
+	1, 2, 3, 4, 5, ql.errortext
+;
+
+COMMENT ON VIEW :bench_schema.RptSumErrors AS 'Provides summary by run of executions and errors. You may want to constrain on RunId.';
+eof
+
+echo -------------------- Creating  RptSumQueries reporting view --------------------
+sql :bench_server delim=eof
+REPLACE VIEW  :bench_schema.RptSumQueries AS 
+SELECT 
+	ql.RunId
+	,ql.QueryName
+	,ql.ERRORCODE
+	,COUNT(*) AS ExecCnt
+	,SUM(ql.RunSecs) AS SumRunSecs
+	,AVERAGE(ql.RunSecs) AS AveRunSecs
+	,MAX(ql.RunSecs) AS MaxRunSecs 
+	,SUM(ql.CPUTime) AS SumCpuTime
+	,100. * SUM(ql.CPUTime)/x.RunCpu AS CpuPctOfRun
+FROM 
+	:bench_schema.RptTestDetail ql
+	,(SELECT RunId AS SumRunId, SUM(CPUTime) AS RunCpu FROM :bench_schema.RptTestDetail GROUP BY 1) x
+WHERE 
+	ql.RunId = x.SumRunId
+GROUP BY 
+	1, 2, 3, x.RunCpu
+;
+
+COMMENT ON VIEW :bench_schema.RptSumQueries AS 'Summarizes query executions for a test. Use with constraints RunId=? or RunId IN ( ).';
+
+eof
+
+echo -------------------- Creating  RptSystemCpu reporting view --------------------
+sql :bench_server delim=eof
+REPLACE VIEW :bench_schema.RptSystemCpu as
+select RunID
+, TestName
+, TheDate
+, TheTime
+, NCPUs
+, cast((RunID (format 'zzz9')) as varchar(4)) || '-' || cast((TheTime(format '99:99:99')) as varchar(8))  RunIdTime 
+, sum(CpuUExec) CpuUExec
+, sum(CpuUServ) CpuUServ
+, sum(CpuIOWait) CpuIOWait
+, sum(CpuIdle) CpuIdle
+-- , sum( FlowCtlCnt) FlowCtlCnt        -- some dbc versions have AmpFlowCtlCnt
+from :bench_schema.ResusageSpma
+group by 1,2,3,4,5;
+
+Comment on :bench_schema.RptSystemCpu as 'Summarizes CPU, IO wait, and idle for each resuage logging event within RunID';
+eof
+
+
+
+label end_script

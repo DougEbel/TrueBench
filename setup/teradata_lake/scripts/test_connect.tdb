@@ -1,0 +1,26 @@
+exec setup/teradata/scripts/validate_variables.tdb
+if :validate_variables = false then goto error_exit
+
+echo This will test the CLASS reference to your JDBC driver and the URL on the DB statement for: ${TdBenchServer}
+
+read myuser Enter your logon id for ${TdBenchServer}: 
+if :myuser not set then goto error_exit
+if :myuser = quit then goto error_exit
+
+read mypassword Enter your password for :myuser on ${TdBenchServer}: 
+if :mypassword not set then goto error_exit
+if :mypassword = quit then goto error_exit
+
+set mydbms = ${TdBenchServer}(:myuser,:mypassword)
+
+echo 
+echo To test access, using logon id :myuser to get current time on DB: ${TdBenchServer}
+sql :mydbms select current_timestamp
+if :retcode = 0 then echo test successful
+if :retcode != 0 then echo ERROR: could not logon to :myuser at ${TdBenchServer} with the password provided.
+goto exit
+
+label error_exit
+echo ... Test not completed
+
+label exit

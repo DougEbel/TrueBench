@@ -1,0 +1,21 @@
+@echo off
+# This script will construct the BEFORE_RUN, AFTER_RUN, and AFTER_NOTE statements that can be pasted into the
+# truebench.tdb startup file. You may have multiple sets of these statements in your truebench.tdb startup file, 
+# one set for each DBMS platform containing the TestTracking table for its tests.
+#
+# Note that the alias for a RunID is captured from the first worker statement encountered in the script.  
+# The BEFORE_RUN/AFTER_RUN statements will be selected to execute for that alias. 
+
+include prompt_for_db.tdb
+if :setup_error is set then goto end_script
+
+echo delim=eof
+Enter the following statements into your truebench.tdb file for tests against the alias: :bench_server
+
+before_run :bench_server sql :bench_server insert into :bench_schema.TestTracking(runid, testname, description, starttime) values(\:runid, '\:testname', '\:testdescription', current_timestamp);
+
+after_run :bench_server sql :bench_server update :bench_schema.TestTracking set stoptime=current_timestamp, queriesexecuted=\:queries, errorcount=\:errors, zerorowcount=\:zerorows, workercount=\:workers where runid = \:runid;
+
+after_note :bench_server sql :bench_server update :bench_schema.TestTracking set notes = '\:note' where runid = \:runid;
+
+eof

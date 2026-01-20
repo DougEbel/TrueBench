@@ -1,0 +1,188 @@
+trace clear
+
+if :os = Windows then set rptfile = temp\\validate_dbms.txt
+if :os != Windows then set rptfile = temp/validate_dbms.txt
+
+echo text::rptfile -------------- validation of ${TdBenchDb} on ${TdBenchServer} ----------------
+echo append::rptfile
+after_sql if :retcode != 0 then goto sql_error
+set noerrors = passed validation of needed rights
+
+sql ${TdBenchServer} select DatabaseName, CreatorName, CreateTimestamp from dbc.databases where databasename = '${TdBenchDb}';
+   
+if :linecnt > 0 then goto grant1
+   echo append::rptfile ERROR - the user/database ${TdBenchDb} does not exist
+   echo ERROR: the user/database ${TdBenchDb} does not exist
+   set noerrors =
+   goto displayresults
+echo Test passed: ${TdBenchDb} exists 
+
+label grant1
+sql ${TdBenchServer} delim=eof
+select username, databasename, accessright, grantauthority from dbc.allrights
+where databasename = '${TdBenchDb}' and username = '${TdBenchDb}' and tablename = 'All' and
+grantauthority = 'Y' and Accessright in 
+('CD','CF','CM','CT','CU','CV',
+'D','DD','DF','DM','DT','DU','DV',
+'E','EF','I','PC','PD','PE','R','U') order by 3;
+eof
+
+if :linecnt >= 21 then goto grant1ok
+   echo append::rptfile ERROR - the user/database ${TdBenchDb} does not have basic needed rights. Issue:
+   echo append::rptfile grant all on ${TdBenchDb} to ${TdBenchDb} with grant option;
+   echo ERROR: did not get at least 21 rights on ${TdBenchDb} to ${TdBenchDb}
+   set noerrors =
+goto grant2
+label grant1ok
+echo Test passed: ${TdBenchDb} had at least 21 rights on ${TdBenchDb}
+
+label grant2
+sql ${TdBenchServer} delim=eof
+select username, databasename, accessright, grantauthority from dbc.allrights
+where databasename = 'dbc' and username = '${TdBenchDb}' and
+grantauthority = 'Y' and Accessright in 
+('E','R');
+eof   
+
+if :linecnt = 2 then goto grant2ok
+   echo append::rptfile ERROR - the user/database ${TdBenchDb} can not create reporting views against dbc. Issue:
+   echo append::rptfile grant select, execute on dbc to ${TdBenchDb} with grant option;
+   echo ERROR: ${TdBenchDb} does not have select, exec access to DBC
+   set noerrors =
+goto grant3
+label grant2ok
+echo Test passed: ${TdBenchDb} has select and execute access to DBC
+
+label grant3
+sql ${TdBenchServer} delim=eof
+select username, databasename, accessright, grantauthority from dbc.allrights
+where databasename = 'syslib' and username = '${TdBenchDb}' and
+grantauthority = 'Y' and Accessright in 
+('EF');
+eof 
+
+if :linecnt = 1 then goto grant3ok
+   echo append::rptfile ERROR - the user/database ${TdBenchDb} will not be able to gather system info via TestStart/TestStop. Issue:
+   echo append::rptfile grant execute function on syslib to ${TdBenchDb} with grant option;
+   echo ERROR: ${TdBenchDb} does not have execute function on syslib
+   set noerrors =
+goto grant4
+label grant3ok
+echo Test passed: ${TdBenchDb} has execute function on syslib
+
+label grant4
+sql ${TdBenchServer} delim=eof
+select username, databasename, accessright, grantauthority from dbc.allrights
+where databasename = 'tdwm' and username = '${TdBenchDb}' and
+grantauthority = 'Y' and Accessright in 
+('EF', 'R');
+eof 
+
+if :linecnt = 2 then goto grant4ok
+   echo append::rptfile ERROR - the user/database ${TdBenchDb} will not be able to gather TASM info via TestStart/TestStop. Issue:
+   echo append::rptfile grant select, execute function on tdwm to ${TdBenchDb} with grant option;
+   echo ERROR: ${TdBenchDb} does not have select, execute function on tdwm
+   set noerrors =
+goto grant5
+label grant4ok
+echo Test passed:  ${TdBenchDb} has select, execute function on tdwm
+
+label grant5
+if ${TdBenchPdcrDb} not set then goto nopdcr
+
+   sql ${TdBenchServer} select * from dbc.databases where databasename = '${TdBenchPdcrDb}';
+   if :linecnt = 1 then goto havepdcr
+      echo append::rptfile ERROR - the PDCR database ${TdBenchPdcrDb} does not exist
+      goto displayresults
+   label havepdcr
+
+   sql ${TdBenchServer} delim=eof
+   select username, databasename, accessright, grantauthority from dbc.allrights
+   where databasename = '${TdBenchPdcrDb}' and username = '${TdBenchDb}' and
+   grantauthority = 'Y' and Accessright in 
+   ('R');
+eof 
+
+   if :linecnt = 1 then goto grant6ok
+      echo append::rptfile ERROR - the user ${TdBenchDb} can't select from  ${TdBenchPdcrDb}. Issue:
+      echo append::rptfile grant select on ${TdBenchPdcrDb} to ${TdBenchDb} with grant option;
+      set noerrors =
+   label grant6ok
+
+label nopdcr
+
+label grant6
+sql ${TdBenchServer} delim=eof
+select username, databasename, accessright, grantauthority from dbc.allrights
+where databasename = 'TD_Metric_SVC' and username = '${TdBenchDb}' and
+grantauthority = 'Y' and Accessright in
+('R');
+eof
+
+if :linecnt = 1 then goto grant6ok
+   echo append::rptfile ERROR - the reporting views in ${TdBenchDb} will not be functional in reporting DBQL/Resusage. Issue:
+   echo append::rptfile grant select, execute function on TD_Metric_SVC to ${TdBenchDb} with grant option;
+   echo ERROR: ${TdBenchDb} does not have select on TD_Metric_SVC
+   set noerrors =
+goto CheckLogging
+label grant6ok
+echo Test passed:  ${TdBenchDb} has select access to TD_Metric_SVC for DBQL/Resusage views
+
+label CheckLogging
+sql ${TdBenchServer} delim=eof
+select typeofrule, "explainFlag", "objFlag", "sqlFlag", "stepFlag" from dbc.dbqlrulesv
+where typeofrule = 'Logging enabled'
+and "explainFlag" = 'T'
+and "objFlag" = 'T'
+and "sqlFlag" = 'T'
+and "stepFlag" = 'T'
+and username = '${TdBenchDb}';
+eof
+if :linecnt = 1 then goto LoggingOK
+
+sql ${TdBenchServer} select typeofrule, "explainFlag", "objFlag", "sqlFlag", "stepFlag" from dbc.dbqlrulesv where username = '${TdBenchDb}';
+if :linecnt = 1 then goto LoggingPartial
+   echo append::rptfile ERROR - There is no query logging defined for ${TdBenchDb} so host DBQL reporting will not be functional. Issue:
+   echo append::rptfile replace query logging with all on ${TdBenchDb} ;
+   echo ERROR: ${TdBenchDb} does not have any DBQL query logging rules set
+   goto ListPrefix
+label LoggingPartial
+   echo append::rptfile WARNING - Only some of the DBQL logging has been enabled for ${TdBenchDb}. Some reporting views may return no rows. Issue:
+   echo append::rptfile replace query logging with all on ${TdBenchDb} ;
+   echo WARNING: ${TdBenchDb} only has partial DBQL query logging rules set
+   goto ListPrefix
+
+label LoggingOK
+echo Test passed:  ${TdBenchDb} has all DBQL logging enabled supporting all reporting views
+
+label ListPrefix
+echo append::rptfile
+echo append::rptfile --------------- list of users starting with ${TdBenchPrefix} ----------------
+sql append::rptfile ${TdBenchServer} select databasename from dbc.databases where databasename like '${TdBenchPrefix}%' and dbkind='U' order by 1;
+if :linecnt = 0 then echo append::rptfile   ... there were no users starting with ${TdBenchPrefix}
+if :linecnt = 0 then echo append::rptfile It is a good idea to have benchmark worker usernames begin with same string to separate out competing workload.
+echo append::rptfile
+if :noerrors is set then echo append::rptfile :noerrors
+
+goto displayresults
+
+label sql_error
+if :retcode > 0 then goto logon_ok
+   echo append::rptfile ERROR - unable to logon to ${TdBenchDb} 
+   set noerrors =
+   goto displayresults
+label logon_ok
+echo 
+echo -------------- due to error in SQL command, stoping validation of DBMS ------------
+echo :all
+
+label displayresults
+echo 
+:view :rptfile
+
+label cleanup
+
+after_sql delete
+if :os = Windows then if :rptfile exists then os del :rptfile
+if :os != Windows then if :rptfile exists then os rm :rptfile
+trace save logs/teradata_validate.log

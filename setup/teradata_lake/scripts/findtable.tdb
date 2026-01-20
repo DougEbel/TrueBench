@@ -1,0 +1,1 @@
+sql ${TdBenchServer} select tablename from dbc.tables where databasename = ':i1' and tablename = ':i2';

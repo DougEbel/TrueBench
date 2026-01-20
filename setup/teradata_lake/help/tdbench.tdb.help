@@ -1,0 +1,45 @@
+------------------------- Help for tdbench.tdb -------------------------
+
+This command script is the first script run on startup of the TdBench jar file whether using 
+TdBench in batch or interactive mode. The design is to use this file for session level settings 
+and then to allow it to call a script that is specific to the DBMS being used which is either
+defaulted in tdbench_config.sh or tdbench_config.bat with the environment variable TdBench_DBMS
+or set using the -d parameter on the TdBench command line. So the structure could be:
+
+   tdbench.tdb
+      tdbench_teradata.tdb
+      tdbench_redshift.tdb
+      tdbench_snowflake.tdb
+
+Commands executed in tdbench.tdb would establish the session environment common to all DBMSs. 
+
+Command examples:
+   TRACE - whether you want commands echoed to the screen
+   STATUS - how often the status of executing workers should be displayed
+   COLOR - settings for input, output, and error text
+   ZIP - save the files collected in the temp directory during a test in a zip file named using the RunID
+   SET - assign values to variables that can be referenced in TdBench scripts.
+   READ - prompt for information such as a password or workload option and save response in a variable
+   IF - test a variable and execute a statement or use GOTO to branch to a label
+
+You could also use it to set variables common to all environments:
+
+   read mypassword Enter the password you want to use
+
+and reference it in other TdBench scripts as :mypassword
+
+To support interactive use, you can also use variables to set command aliases. The edit and view
+variables are set by default based on the operating system, but you can replace them. Examples:
+
+   set edit = os C:\Program Files\Notepad++\notepad++.exe 
+   set s = sql acme
+
+Then interactively, you could issue:
+
+   :edit scripts/workload5.tdb
+   :s select current_timestamp
+
+To see all of the variables that are available, use the SET command without parameters.
+
+For help on the TdBench commands referenced above, exit SETUP and issue help [ command ]
+

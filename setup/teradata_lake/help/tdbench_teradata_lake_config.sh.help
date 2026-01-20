@@ -1,0 +1,18 @@
+------------------------- Help for tdbench_teradata_lake_config.sh -------------------------
+
+The environment variable settings tdbench_teradata_config.sh are used by the scripts that set up the host DBMS  
+reporting. Those scripts need to know the user/database name where the TestTracking table and the reporting
+views are stored. The main variables that will be used for all setup situations:
+
+TdBenchServer - defines the alias for the Teradata server as defined by a DB statement in tdbench.tdb
+TdBenchDB - defines the database/user where the reporting views and TestTracking table will be stored.
+TdBenchPrefix - the prefix used for all worker logon IDs to distinguish benchmark workload from "Noise" from other users
+
+For the Teradata Vantage Enterprise Edition, there were a large set of variables that supported optional union 
+views of DBC tables with standard PDCR history, customer modified PDCR history, or saved versions of prior release 
+DBQL and ResUsage data. As of this release of TdBench, it is not anticipated that the aaS model of Teradata Vantage 
+Lake Edition will pose those same requirements. 
+
+Other than the need for the environment variables for setup scripts, this script can be used to prepare/clean up
+DBMS specific directories/files in preparation for testing. It can also set environment variables that can 
+be used in the initiation of OS commands within a test execution. 

@@ -1,0 +1,36 @@
+echo delim=eof
+This will create the user ${TdBenchDb} to support reporting on DBQL and Resuage
+If your ID doesn't have the rights to issue the grants, you may need to logon as DBC.
+If you are not allowed to issue some of the grants, the teststart and teststop macros 
+will adapt to what is allowed.
+
+Your default DB alias (from tdbench_teradata_lake_config) is: ${TdBenchServer}
+eof
+set mydbms =
+exec setup/:i1/scripts/test_connect.tdb
+if :validate_variables = false then goto error_exit
+if :mydbms not set then goto error_exit
+
+read parent=quit Enter the parent database for ${TdBenchDb}:
+if :parent = quit then goto error_exit
+read dbpassword=quit Enter the password for ${TdBenchDb}:
+if :dbpassword = quit then goto error_exit
+
+sql :mydbms setup/:i1/scripts/create_tdbench.sql
+
+if :retcode = 0 then echo all create and grant statements were successful
+if :retcode = 0 then goto exit
+echo There were errors in the setup. Review the output above. delim=eof
+
+If you know the password (e.g. xxxx) to DBC, you can use the command:
+   sql ${TdBenchServer}(dbc,xxxx) grant .... 
+to override the default credentials. If you need someone else to issue the grants,
+you can rerun the create_tdbench.tdb script and ignore the error that user exists.
+eof
+
+goto exit
+
+label error_exit
+echo ... tdbench user ${TdBenchDb} not created
+
+label exit

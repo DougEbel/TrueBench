@@ -1,0 +1,20 @@
+------------------------- Help for test_connect.tdb -------------------------
+
+This script will validate that environment variables have been set up from tdbench_config.sh/tdbench_config.bat 
+and optionally tdbench_teradata_config.sh/tdbench_teradata_config.bat for:
+
+TdBench_DBMS - defines the DBMS (and associated scipt files) to be used by TdBench
+TdBenchServer - defines the alias for the Teradata server as defined by a DB statement in tdbench.tdb
+TdBenchDB - defines the database/user where the reporting views and TestTracking table will be stored. 
+
+It will then do a simple connection to the DBMS server with your logon ID and password to 
+ensure that the CLASS statement and DB statement for the TdBenchServer have been set up correctly. 
+Obviously, you will need to define those in the tdbench.tdb or optionally in tdbench_teradata.tdb
+files where they are executed everytime TdBench starts.
+
+When creating the DB statement, use the logon and password you intend for the database/user to 
+be used after running create_tdbench.tdb.  This script overrides the user and password you put on 
+the DB statement (since TdBenchDB hasn't been created yet). 
+
+This is also run from create_tdbench.tdb to get your credentials to set up the database/user
+defined by TdBenchDB.

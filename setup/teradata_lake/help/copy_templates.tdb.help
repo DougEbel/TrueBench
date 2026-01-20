@@ -1,0 +1,33 @@
+------------------------- help for copy_templates.tdb -------------------------
+
+There is a template directory associated with each DBMS in the setup directory. These will provide
+a starter structure for the configuration and TdBench startup scripts. There are 2 common config
+files for every DBMS: tdbench_config.sh (Linux) tdbench_config.bat (Windows).  
+
+If you are only using 1 DBMS, the setting for the default DBMS with the variable TdBench_DBMS 
+will be set for you and you won't need to modify that file. There will be no conflict in copying
+in the file.  You may add additional environment variable and directory/file setup to that script. 
+
+However, on subsequent running of copy_templates.tdb, you will be asked if you want to overlay 
+that file. You may want to say no and edit the changes manually.  You can also override the 
+default DBMS with the -d parameter to tdbench.sh or tdbench.bat. 
+
+The copy_templates.tdb will also ask on subsequent executions if you want to overlay tdbench.tdb 
+which calls the DBMS specific script defined by TdBench_DBMS or the -d parameter.  If you have
+put any personal preference settings into tdbench.tdb, you will want to say no to the prompt. 
+
+The overall structure of the config and startup scripts is:
+
+   tdbench_config.sh - defines the jar version and the default TdBench_DBMS
+      tdbench_teradata_lake_config.sh - sets up environment variables for scripts to be used with this DBMS
+      tdbench_snowflake_config.sh - sets up environment variables for a different DBMS
+      ...
+   tdbench.tdb - sets up the personal preferences in tdbench then executed the script for the default DBMS
+      tdbench_teradata_lake.tdb - defines DBMS specific connections with CLASS and DB statements
+      tdbench_snowflake.tdb - defines DBMS specific settings for another DBMS
+      ...
+
+After you have made essential changes for your DBMS, you will want to restart TdBench to 
+get those environment variables and TdBench settings defined.
+
+

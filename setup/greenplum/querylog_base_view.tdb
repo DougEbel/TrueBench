@@ -1,0 +1,80 @@
+@echo off
+# ----------------------------------------------------------------------
+# querylog_base_view.tdb
+#
+# This example creates a base view to join TrueBench TestTracking to Greenplum
+# query logging sources. It may need editing based on the DBMS release, log
+# configuration, and platform options selected.
+#
+# Multiple versions of query logging exist in Greenplum environments. This
+# sample is based on gp_toolkit log views where available, but even that may
+# require revisions based on your current DBMS version and settings.
+#
+# View created:
+#   :bench_schema.QueryLog_Base
+#
+# Purpose:
+# - Provide a stable base view for reporting by RunId and QueryName
+# - Avoid embedding complex query log join logic in README.md examples
+#
+# Notes:
+# - Some Greenplum installations store query history only in server log files.
+# - QueryName is extracted from QueryText when insert_query_name=yes embeds:
+#     tdb=<qname> via the TrueBench PROFILE command
+# ----------------------------------------------------------------------
+
+include prompt_for_db.tdb
+if :setup_error is set then goto end_script
+
+echo Creating view :bench_schema.QueryLog_Base ...
+
+sql :bench_server delim=eof
+
+create or replace view :bench_schema.QueryLog_Base as
+select
+    tt.RunId,
+    tt.TestName,
+    tt.Description,
+    tt.StartTime as TestStartTime,
+    tt.StopTime  as TestStopTime,
+
+    -- Log identity/context (best-effort; depends on source)
+    l.logtime     as QueryStartTime,
+    l.username    as UserName,
+    l.database    as DatabaseName,
+    l.session_id  as SessionId,
+
+    -- SQL text (as captured by the logging source)
+    l.message     as QueryText,
+
+    -- Extract QueryName from embedded identifier inserted by TrueBench
+    -- Expected string pattern: tdb=<qname>
+    case
+      when position('tdb=' in l.message) > 0 then
+        substring(
+          l.message
+          from position('tdb=' in l.message) + 4
+          for
+            position(' ' in
+              substring(l.message from position('tdb=' in l.message) + 4) || ' '
+            ) - 1
+        )
+      else null
+    end as QueryName
+
+from
+    :bench_schema.TestTracking tt
+join
+    gp_toolkit.gp_log_system l
+  on
+    l.logtime between tt.StartTime and tt.StopTime
+where
+    -- Keep only SQL statement log lines if the log view includes mixed message types
+    (l.message ilike 'statement:%' or l.message ilike '%tdb=%')
+;
+
+eof
+
+if :errorcode != 0 then echo ERROR - creation of :bench_schema.QueryLog_Base failed
+
+label end_script

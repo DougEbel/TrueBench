@@ -1,0 +1,62 @@
+@echo off
+# This script will create the database or user on the host Teradata server and populate testtracking and reporting views. 
+
+# clear all variables so errors from last session don't affect this one. 
+if :bench_server is set then set bench_server =
+if :bench_schema is set then  set bench_schema =
+
+include prompt_for_db.tdb
+if :setup_error is set then goto had_errors
+
+sql :bench_server select ':bench_schema exists' from dbc.databases where databasename = ':bench_schema' group by 1 having count(*) = 1;
+
+if :rowcount = 1 then goto database_exists
+ 
+	read parent_db Enter the database name that will own :bench_schema: 
+	if :parent_db not set then do
+	   echo ERROR - without the owning database name saved in parent_db variable, setup can not continue
+	   goto had_errors
+	end
+
+	read bench_size Enter the number of MB for :bench_schema (50 is a good size) :bench_size: 
+	if :bench_size not set then do
+	   echo ERROR - without the owning database name saved in parent_db variable, setup can not continue
+	   goto had_errors
+	end
+
+	echo With Teradata, the TestTracking table can either be in a database or under a user. 
+	read password If you provide a password, a user will be created, otherwise a database.  Enter Password:
+
+	if password is set then do
+	   sql :bench_server create user :bench_schema from :parent_db as password = :password, perm=:bench_size * 1024**2
+	else do
+	   sql :bench_server create database :bench_schema from :parent_db as perm=:bench_size * 1024**2
+	end
+	if :errorcode != 0 then goto had_errors
+	
+	goto setup_testtracking
+
+label database_exists
+    echo :bench_server exists. If TestTracking already exists, we will just replace/update the views
+
+label setup_testtracking
+exec testtracking.tdb
+if :errorcode != 0 then echo With errorcode :errorcode, will continue to replace the views
+exec reporting_functions.tdb
+if :errorcode != 0 then goto had_errors
+exec querylog_base_view.tdb
+if :errorcode != 0 then goto had_errors
+exec reporting_views.tdb
+if :errorcode != 0 then goto had_errors
+
+exec make_links.tdb
+
+echo Setup completed with no errors
+goto end_script
+
+label had_errors
+echo ... Since errors occurred, not all setup steps were executed. Correct the errors and rerun the setup. 
+echo If the errors were due to wrong answers to the prompts, you will need to restart TrueBench 
+echo to clear out variables to cause the setup scripts to prompt for new values. 
+
+label end_script

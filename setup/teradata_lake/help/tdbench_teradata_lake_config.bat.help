@@ -1,0 +1,41 @@
+------------------------- Help for tdbench_teradata_config.bat -------------------------
+
+The environment variable settings tdbench_teradata_config.bat are used by the scripts that set up the host DBMS  
+reporting. Those scripts need to know the user/database name where the TestTracking table and the reporting
+views are stored. The main variables that will be used for all setup situations:
+
+TdBenchServer - defines the alias for the Teradata server as defined by a DB statement in tdbench.tdb
+TdBenchDB - defines the database/user where the reporting views and TestTracking table will be stored.
+TdBenchPrefix - the prefix used for all worker logon IDs to distinguish benchmark workload from "Noise" from other users
+
+For the Vantage Enterprise Edition, companies use PDCR or their own customized version to move DBQL and possibly
+resusage data out of the DBC database to one of the PDCR databases to organize the data for performance and reduce
+storage demands within DBC. This data is removed from DBC DBQL and possibly ResUsage tables once or three times per day. 
+That would complicate reporting benchmark results if only depending on data in DBC. 
+
+The trigger for enabling PDCR reporting is providing a value for the environment variable TdBenchPdcrDb. 
+When that variable is set, reporting views will be created that define a union of data in DBC and PDCR.
+The design of those reporting view creation scripts intersects columns of DBC and PCDR such that:
+- column differences between DBC and PDCR are supported, especially when companies customize PDCR
+- Instead of PDCR, tables may be from a prior release of Vantage and views will union matching columns between releases.
+
+The environment variable names follow a pattern where "TdBenchPdcr" is used as a prefix to the tablename
+in PDCR. PDCR used a naming pattern against the DBC table name adding "_Hst" as a suffix. So 
+- the DBC table under the DBC.QryLog view which is DBC.dbqlogtbl 
+- is the PDCR view PDCRINFO.DBQLogTbl_hst 
+- and is referenced by the variable TdBenchPdcrDBQLogTbl
+
+The tdbench_teradata_config.bat have defaults set for the standard PDCR view names. A sample of those:
+
+export TdBenchPdcrDb=
+export TdBenchPdcrDBQLExplainTbl=DBQLExplainTbl_Hst
+export TdBenchPdcrDBQLObjTbl=DBQLObjTbl_Hst
+export TdBenchPdcrDBQLogTbl=DBQLogTbl_Hst
+...
+export TdBenchPdcrResUsageSawt=ResUsageSawt_Hst
+export TdBenchPdcrResUsageScpu=ResUsageScpu_Hst
+...
+
+Data in PDCR is partitioned by the column LogDate which is derived from CollectTimeStamp. For compatibility,
+the views whether PDCR is used or not synthesize a similar LogDate column derived from CollectTimeStamp. 
+

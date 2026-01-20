@@ -1,0 +1,44 @@
+@echo off
+
+# This is the basic setup for TrueBench host DBMS query log reporting.
+# Comments are included showing where you can enhance the setup for your DBMS platform.  
+
+# Get the values for :bench_server and :bench_schema
+
+include prompt_for_db.tdb
+if :setup_error is set then goto had_errors
+
+# The scripts assume that the :bench_schema has already been created with appropriate privileges. 
+# At this point, you could prompt for additional parameters needed to issue SQL statements
+# to create the schema and grant rights.
+ 
+# Create the TestTracking table that will contain the RunID, StartTime, and StopTime 
+# that precisely align with the system clock used in the host DBMS query logging. 
+
+exec testtracking.tdb
+if :errorcode != 0 then goto had_errors
+
+# At this point, you could execute a script to create the base level view(s) that join the
+# TestTracking table to the query logging table(s) by choosing queries that started between
+# the two timestamps on the TestTracking table.  The views should add select columns from the
+# test tracking table plus all of the columns from the DBMS query logging table(s).
+
+# Next, execute a script to create reporting views that use the base table views to select
+# a useful subset of columns, add calculations, and summarize as appropriate.
+
+# Finally, show the user the BEFORE_RUN, AFTER_RUN, and AFTER_NOTE statements for their 
+# truebench.tdb startup file. 
+
+exec make_links.tdb
+
+echo Setup completed with no errors
+goto end_script
+
+label had_errors
+echo << ENDMSG
+... Since errors occurred, not all setup steps were executed. Correct the errors and rerun the setup. 
+If the errors were due to wrong answers to the prompts, you will need to restart TrueBench 
+to clear out variables to cause the setup scripts to prompt for new values. 
+ENDMSG
+
+label end_script

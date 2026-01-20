@@ -1,0 +1,26 @@
+@# The following statements can be uncommented (remove the @#) to activate coordination of TdBench Host reporting. 
+@# FYI: Statements preceded with @ are not displayed on the console.
+
+@# before_run sql ${TdBenchServer} exec ${TdBenchDb}.teststart(':testname', ':testdescription', :runsecs, :runid);
+@# after_run sql ${TdBenchServer} exec ${TdBenchDb}.teststop( , :runid, :resultcount, :errorcount);
+@# after_note sql ${TdBenchServer} update ${TdBenchDb}.testtracking set runnotes=':note' where clientrunid = :runid
+
+@# NOTE: the above statements reference environment variables set in tdbench_teradata_config.sh
+
+@# If you are running utilities that create logs, it is highly recommended that you direct 
+@# that output to the temp directory and uncomment the following statement to zip up the logs
+@# at the end of each test to the logs directory.  That zip file will be named as :runid.zip.
+@# the following command will also erase the temp directory to prepare for the next test. 
+
+@# zip temp logs erase
+
+@# You need one CLASS statement to define the JDBC driver but may have multiple DB statements for different
+@# logons for IDs with different DBMS privileges or for worker sessions executing different workload profiles. 
+@# For security, you could export an environment variable with the password and reference like ${mypassword}
+
+@# The following is valid for the Teradata JDBC driver (used for Vantage Enterprise or Vantage Lake Edition)
+@class com.teradata.jdbc.TeraDriver jdbc:teradata terajdbc4.jar
+
+@# Example DB statement: (you can either use an IP address or a URL for the host DBMS)
+@# db myalias jdbc:teradata://10.26.11.103 xxx_benchmark SomePassword
+

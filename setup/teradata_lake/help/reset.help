@@ -1,0 +1,7 @@
+------------------------- Reset of TdBench -------------------------
+
+Once you've updated the startup files that set session options, 
+variables used to setup host reporting and definition of the 
+database aliases, you will want to restart TdBench so the 
+environment variables and tdbench variables and settings can
+be loaded. 

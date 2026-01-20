@@ -1,0 +1,62 @@
+# Parms  dbqlogtable
+echo View ${TdBenchDb}.:i1 joins ${TdBenchDb}.TestTracking and view ${TdBenchDb}.DBQLogV_sum 
+sql text:temp/dbql_temp.sql ${TdBenchServer} delim=eof
+select Qtext from (
+select 10 (named Qseq, integer, title ''), 'replace view ' || '${TdBenchDb}' || '.' || ':i1' || ' as'  (named Qtext, varchar(120), title '') from ${TdBenchDb}.onerow  union
+select 20, 'select tt.RunID'  from ${TdBenchDb}.onerow union
+select 21, ',tt.ClientRunID'  from ${TdBenchDb}.onerow union
+select 25, ',tt.BenchSystemName ' from ${TdBenchDb}.onerow  union
+select 30,',tt.testname' from ${TdBenchDb}.onerow  union
+select 40,',tt.RunTitle' from ${TdBenchDb}.onerow  union
+select 50,',tt.ReleaseExecTime'  from ${TdBenchDb}.onerow  union
+select 60,',tt.ActualStopTime'  from ${TdBenchDb}.onerow  union
+select 70,',tt.ReportingStopTime'  from ${TdBenchDb}.onerow  union
+select 80, ',cast(ql.collecttimestamp as date) LogDate' from ${TdBenchDb}.onerow union
+select 10000+dbc.columnid, ', ql.' || dbc.columnname
+    from dbc.ColumnsV dbc
+    where dbc.databasename = '${TdBenchDb}'
+       and dbc.tablename = 'DBQLogV_sum'
+ union
+select 20000, 'from ${TdBenchDb}.' || 'DBQLogV_sum' || ' ql  join ' || '${TdBenchDb}' || '.TestTracking tt' from ${TdBenchDb}.onerow union
+select 20005, ' on ql.starttime between tt.ReleaseExecTime and tt.ActualStopTime'  from ${TdBenchDb}.onerow 
+) x order by Qseq;
+eof
+
+sql ${TdBenchServer} temp/dbql_temp.sql
+sql ${TdBenchServer} comment on ${TdBenchDb}.:i1  as 'TdBench testtracking extensions to TD_METRIC_SVC.:i1 with no PDCR'; 
+
+echo View ${TdBenchDb}.:i1_tt joins ${TdBenchDb}.TestTracking and view TD_Metric_SVC for use by other DBQL views
+
+sql ${TdBenchServer} delim=eof
+replace view ${TdBenchDb}.:i1_TT as
+select tt.RunID
+,tt.ClientRunID
+,tt.BenchSystemName
+,tt.testname
+,tt.RunTitle
+,tt.ReleaseExecTime
+,tt.ActualStopTime
+,tt.ReportingStopTime
+,qlog.ParentQueryID
+,cast(qlog.PATH_YEAR as char(4)) as PATH_YEAR
+,cast(qlog.PATH_MONTH as char(2)) as PATH_MONTH
+,cast(qlog.PATH_DAY as char(2)) as PATH_DAY
+,cast(qlog.PATH_HOUR as char(2)) as PATH_HOUR
+ ,cast(case
+     when qlog.querytext like '%exec%benchmark.%' or qlog.querytext like '%call%benchmark.%' or qlog.querytext like '%/*%tdb=%*/%' then ${TdBenchDb}.ExtractBenchQname(qlog.querytext)
+         when qlog.queryband like '%tdb=%' then ${TdBenchDb}.ExtractBenchQname(qlog.queryband)
+         else '' end as varchar(50)) as QueryName
+ ,cast(case
+     when qlog.querytext like '%/*%tdb=%.%*/%' then ${TdBenchDb}.ExtractBenchQSubname(qlog.querytext)
+         when qlog.queryband like '%tdb=%.%' then ${TdBenchDb}.ExtractBenchQSubname(qlog.queryband)
+         else '' end as varchar(50)) as QueryStepName
+,qlog.Starttime
+,${TdBenchDb}.TimestampSubtract(qlog.FirstRespTime, tt.StartTime) AS RunSecs
+ ,${TdBenchDb}.TimestampSubtract(qlog.StartTime, tt.ReleaseExecTime) AS StartSecs
+
+from TD_Metric_SVC.DBQLogV qlog  join ${TdBenchDb}.TestTracking tt
+ on qlog.starttime between tt.ReleaseExecTime and tt.ActualStopTime
+  where SUBSTRING(qlog.PATH_COMPONENT_ID FROM 1 FOR 3) = 'pog'; 
+eof
+sql ${TdBenchServer} comment on ${TdBenchDb}.:i1_TT as 'TDBench TestTracking extensions for use by other DBQL views';
+

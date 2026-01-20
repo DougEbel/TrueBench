@@ -1,0 +1,547 @@
+trace clear
+echo Starting to set up host DBMS utility Macros
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.DbSpace(dbName varchar(128), MaxLevel integer, Scale integer) as
+(
+with recursive DBList (DbName, lvl, mPerm, sortorder, CommentString) as
+(select root.databasename,1, root.permspace, trim(root.databasename)(varchar(500)), trim(root.CommentString)
+from dbc.databases as root
+where root.databasename =  :dbName
+union all
+select child.databasename, parent.lvl + 1, child.permspace, parent.sortorder || trim(child.databasename), trim(child.CommentString)
+from DBList as parent, dbc.databases as child
+where parent.dbname = child.ownername
+and child.databasename <> child.ownername
+and parent.lvl < :maxLevel
+)
+select db.lvl (title 'Lvl'),
+substr('                                               ',1,db.lvl*3) || db.dbname (title 'DB Name'),
+db.mperm/(1024**:scale)  (title 'DbSpace',format 'ZZZ,ZZZ,ZZ9.9') "DbSpace",
+dbsz.dbused/(1024**:scale) (title  'DbUsed',format 'ZZZ,ZZZ,ZZ9.9') "DbUsed",
+100*zeroifnull(cast(dbsz.dbused as float) / nullifzero(db.mperm)) (title '%Used', format 'zz9.99%') "%Used",
+dbsz.SkewRatio (title 'SkewRatio', format 'z9.99'),
+zeroifnull(sum(chdb.permspace))/(1024**:scale) (title 'Allocated',format 'ZZZ,ZZZ,ZZ9.9') "Allocated",
+(sum(zeroifnull(chsz.dbused)))/(1024**:scale) (title 'AllocUsed',format 'ZZZ,ZZZ,ZZ9.9') "AllocUsed",
+100*(zeroifnull(cast(sum(chsz.dbused) as float) / nullifzero(sum(chdb.permspace)))) (title '%Used', format 'zz9.99%' ) "%AllocUsed",
+db.CommentString
+from dblist as db
+left outer join dbc.children as ch on db.dbname = ch.parent
+left outer join dbc.databases as chdb on ch.child = chdb.databasename
+left outer join
+(select databasename,
+sum(currentperm) as dbused,
+zeroifnull(max(currentperm)/nullifzero(min(currentperm))) as SkewRatio
+from dbc.diskspace group by 1)
+as chsz on ch.child = chsz.databasename
+left outer join
+(select databasename,
+sum(currentperm) as dbused,
+zeroifnull(max(currentperm)/nullifzero(min(currentperm))) as SkewRatio
+from dbc.diskspace group by 1)
+as dbsz on db.dbname = dbsz.databasename
+group by 1, 2, 3,  dbsz.dbused, dbsz.SkewRatio, db.mperm, sortorder, db.CommentString
+order by sortorder
+;);
+eof
+sql ${TdBenchServer} Comment on macro ${TdBenchDb}.DbSpace 'Shows space allocated/used for a given database and its children down a given depth for given scale 1=K, 2=MB, 3=GB, 4=TB';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.DbSpaceM(dbName varchar(128) default 'DBC', MaxLevel integer default 99) as
+(exec ${TdBenchDb}.DbSpace(:dbName, :MaxLevel, 2)
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro ${TdBenchDb}.DbSpaceM  'Shows space allocated/used in MB for a given database (default DBC) and its children down a given depth (default 99) ';
+
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.DbSpaceG(dbName varchar(128) default 'DBC', MaxLevel integer default 99) as
+(exec ${TdBenchDb}.DbSpace(:dbName, :MaxLevel, 3)
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro ${TdBenchDb}.DbSpaceG  'Shows space allocated/used in GB for a given database (default DBC) and its children down a given depth (default 99) ';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.RowMinMax(dbName varchar(128), tbName varchar(128)) as
+(
+select 0 (integer), 'Select ''' || trim(databasename) || '.' || trim(tablename) || '''' (varchar(512))
+from dbc.tables 
+where databasename = :dbname
+and tablename = :tbname
+union   
+select 1 (integer), ', count(*) (bigint)'
+from dbc.tables 
+where databasename = :dbname
+and tablename = :tbname
+union   
+select columnid, 
+case
+when columntype in ('I', 'i1', 'I2', 'I8', 'D') then
+',min(' || trim(columnname) || ')(title ''' || trim(columnname) || '_Min'')'
+|| ', max(' || trim(columnname) || ')(title ''' || trim(columnname) || '_Max'')'
+|| ', ave(cast(' || trim(columnname) || ' as float))(title ''' || trim(columnname) || '_Ave'')' 
+when columntype in ('F') then
+',min(' || trim(columnname) || ')(title ''' || trim(columnname) || '_Min'')'
+|| ', max(' || trim(columnname) || ')(title ''' || trim(columnname) || '_Max'')'
+|| ', ave(' || trim(columnname) || ' )(title ''' || trim(columnname) || '_Ave'')'     
+when columntype in ('AT','DA','TS') then
+',min(' || trim(columnname) || ')(title ''' || trim(columnname) || '_Min'')'
+|| ', max(' || trim(columnname) || ')(title ''' || trim(columnname) || '_Max'')'
+when columntype in ('CV', 'BV') then
+',max(character_length(' || trim(columnname) || '))(title ''' || trim(columnname) || '_MaxL'')'
+|| ', ave(cast(character_Length(' || trim(columnname) || ') as bigint))(title ''' || trim(columnname) || '_AveL'')'
+when columntype in ('CF') then
+',max(character_length(trim(' || trim(columnname) || ')))(title ''' || trim(columnname) || '_MaxL'')'
+|| ', ave(cast(character_Length(trim(' || trim(columnname) || ')) as bigint))(title ''' || trim(columnname) || '_AveL'')'    
+else 
+'  /*  ' || trim(columnname) || ',  ColumnType=' || columntype || '  not analyzed  */  '
+end (varchar(512))
+from  dbc.columns 
+where databasename = :dbname
+and tablename = :tbname
+union 
+select 9999, ' from ' || trim(databasename) || '.' || trim(tablename) || ';  '
+from dbc.tables 
+where databasename = :dbname
+and tablename = :tbname
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro  ${TdBenchDb}.RowMinMax as 'Determines the min and max values for all columns in a given database and given table. ';
+
+
+sql ${TdBenchServer} delim=eof
+REPLACE MACRO ${TdBenchDb}.RowSize (DbName varchar(128), TbName varchar(128)) AS
+(
+SELECT TRIM(databasename) (TITLE 'DbName'), 
+TRIM(tablename) (TITLE 'TbName'),
+TRIM(columnname)(TITLE 'ColName'),
+CASE  columntype
+WHEN  'AT' THEN 'Time'
+WHEN  'BF' THEN 'Byte '
+WHEN  'BO' THEN 'Blob'
+WHEN  'BV' THEN 'VarByte'
+WHEN  'CF' THEN 'Char'
+WHEN  'CO' THEN 'Clob'
+WHEN  'CV' THEN 'Varchar'
+WHEN  'D' THEN 'Decimal'
+WHEN  'DA' THEN 'Date'
+WHEN  'F' THEN 'Float'
+WHEN  'I' THEN 'Integer'
+WHEN  'I1' THEN 'ByteInt'
+WHEN  'I2' THEN 'SmallInt'
+WHEN 'SZ' THEN 'TimeStamp+Zone'
+WHEN  'TS' THEN 'TimeStamp'
+WHEN 'TZ' THEN 'Time+Zone'
+ELSE  columntype
+END  (TITLE 'Datatype'),
+columnlength,
+CASE  columntype
+WHEN  'AT' THEN 6
+WHEN  'BF' THEN columnlength
+WHEN  'BO' THEN columnlength
+WHEN  'BV' THEN 2
+WHEN  'CF' THEN chartype*columnlength
+WHEN  'CO' THEN columnlength
+WHEN  'CV' THEN 2
+WHEN  'D' THEN columnlength
+WHEN  'DA' THEN columnlength
+WHEN  'F' THEN columnlength
+WHEN  'I' THEN columnlength
+WHEN  'I1' THEN columnlength
+WHEN  'I2' THEN columnlength
+WHEN 'SZ' THEN 12
+WHEN  'TS' THEN   10
+WHEN 'TZ' THEN 8
+ELSE  columnlength
+END  (TITLE 'Fixed Bytes'),
+CASE  columntype
+WHEN  'BV' THEN columnlength
+WHEN  'CV' THEN chartype*columnlength
+ELSE  0
+END  (TITLE 'Variable'),
+CASE WHEN chartype = 1 THEN 'Latin'
+WHEN chartype = 2 THEN 'Unicode'
+WHEN chartype = 3 THEN 'KanjiSJIS'
+WHEN chartype = 4 THEN 'Graphic'
+WHEN chartype = 5 THEN 'Kanji1'
+WHEN chartype = 0 THEN 'Numeric'
+END  (TITLE 'Character Set'),
+Compressible
+FROM  dbc.COLUMNS 
+WHERE  databasename = :dbname
+AND         (tablename = :tbname  or 'All' = :tbname)
+ORDER  BY 1,2,columnid
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro  ${TdBenchDb}.RowSize as 'Calculates the physical row width for a given database and given tablename.';
+
+
+sql ${TdBenchServer} delim=eof
+REPLACE  macro ${TdBenchDb}.TableSpace (Dbname varchar(128)) as
+(
+select 
+aSpace.tablename, 
+sum(aSpace.currentperm)/(1024**2)(format 'G-(15)', title'CurPerm MB'),
+max(aSpace.currentperm)/nullifzero(min(currentperm)) (Format 'G-(6)D99', title 'Max/Min Skew'),
+/* (sum(aSpace.currentperm)/db.permspace) * 100 (Format 'zz9.9%', Title '% of Maxperm'), */
+sum(MaxVproc.cPerm - aSpace.currentperm)/(1024**2) (title 'Skew Lost MB')
+from dbc.tablesize as aSpace,
+dbc.databases as db, 
+(select tablename, max(currentperm) as cPerm from dbc.tablesize where databasename = :Dbname group by 1) as MaxVproc
+where aspace.databasename = :Dbname
+and   aspace.databasename = db.databasename
+group by 1 
+order by  1
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro  ${TdBenchDb}.Tablespace as 'Shows the sizes of tables under a given database along with the calculated skew.';
+
+sql ${TdBenchServer} delim=eof
+REPLACE  macro ${TdBenchDb}.ShowDb (dbname varchar(128)) as
+(
+select showtext (title '') from(
+select case
+when tablekind = 'T' or tablekind = 'O' then 1
+when tablekind = 'V' then 2
+when tablekind = 'I' then 3
+when tablekind = 'M' then 4
+when tablekind = 'P' then 5
+end as ShowOrder,
+case
+when tablekind = 'T' or tablekind = 'O' then  'show table '
+when tablekind = 'V' then 'show view '
+when tablekind = 'I' then 'show Join Index '
+when tablekind = 'M' then 'show macro '
+when tablekind = 'P' then  'show Procedure '
+end || trim(databasename) || '.' || trim(tablename) || ';'  as Showtext
+from dbc.tablesV
+where databasename = :dbname
+and showorder is not null) x
+order by showorder, showtext
+;);
+eof
+echo 20% complete
+sql ${TdBenchServer} COMMENT on macro ${TdBenchDb}.ShowDb as 'Lists out all DDL in a database';
+sql ${TdBenchServer} delim=eof
+REPLACE  macro ${TdBenchDb}.ShowDb_Children (dbname varchar(128)) as
+(
+select showtext (title '') from(
+select databasename, case
+when tablekind = 'T' or tablekind = 'O' then 1
+when tablekind = 'V' then 2
+when tablekind = 'I' then 3
+when tablekind = 'M' then 4
+when tablekind = 'P' then 5
+end as ShowOrder,
+case
+when tablekind = 'T' or tablekind = 'O' then  'show table '
+when tablekind = 'V' then 'show view '
+when tablekind = 'I' then 'show Join Index '
+when tablekind = 'M' then 'show macro '
+when tablekind = 'P' then  'show Procedure '
+end || trim(databasename) || '.' || trim(tablename) || ';'  as Showtext
+from dbc.tablesV join dbc.children on parent = :dbname and child = databasename
+and showorder is not null) x
+order by databasename, showorder, showtext
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro ${TdBenchDb}.ShowDb_Children as 'Lists out all DDL in a database and all of its children';
+
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.ShowTable (dbname varchar(128)) as
+(
+select 'show table ' || trim(databasename) || '.' || trim(tablename) || ';' 
+from dbc.tablesv
+where databasename = :dbname 
+and tablekind in ('T', 'O') 
+order by 1
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro  ${TdBenchDb}.showtable as 'Creates list of show statements for the tables of a given database';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.ShowView (dbname varchar(128)) as
+(
+select 'show view ' || trim(databasename) || '.' || trim(tablename) || ';' 
+from dbc.tablesV 
+where databasename = :dbname 
+and tablekind = 'V' 
+order by 1
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro  ${TdBenchDb}.showview as 'Creates list of show statements for the views of a given database';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.ShowProcedure (dbname varchar(128)) as
+(
+select 'show Procedure ' || trim(databasename) || '.' || trim(tablename) || ';' 
+from dbc.tablesV 
+where databasename = :dbname 
+and tablekind = 'P' 
+order by 1
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro  ${TdBenchDb}.showprocedure as 'Creates list of show statements for the procedures of a given database';
+
+sql ${TdBenchServer} delim=eof
+REPLACE  macro ${TdBenchDb}.ShowMacro (dbname varchar(128)) as
+(
+select 'show macro ' || trim(databasename) || '.' || trim(tablename) || ';' 
+from dbc.tablesV 
+where databasename = :dbname 
+and tablekind = 'M' 
+order by 1
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro  ${TdBenchDb}.showmacro as 'Creates list of show statements for the macros of a given database';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.CreateViews(dbname varchar(128), viewdb varchar(128)) as
+(
+Select 'REPLACE view ' || trim(:viewdb) || '.' || trim(tablename) ||
+' as Locking row for access select * from ' || trim(:dbname) || '.' || trim(tablename) || ';'
+from dbc.tablesV 
+where databasename = :dbname 
+and tablekind in ('T', 'O') 
+order by 1
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro  ${TdBenchDb}.CreateViews as 'Creates list of create view statements against tables of a given database';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.CreateViewLong(TableDb varchar(128), ViewDb varchar(128), TableName varchar(128)) as ( 
+select RequestText from (
+select 1 (integer) Seqno, 'REPLACE view ' || trim(:viewdb) || '.' || trim(tablename) || '(' as RequestText
+from dbc.tablesV where databasename = :tabledb and tablename = :TableName
+union
+select columnid, case when columnid = 1025 then trim(columnname) else ',' || trim(columnname) end 
+from dbc.columnsV where databasename = :TableDb  and tablename = :TableName
+union
+select 10000, ')  as Locking row for access select ' from ${TdBenchDb}.onerow
+union
+select 10000 + columnid, case when columnid = 1025 then trim(columnname) else  ',' || trim(columnname) end
+from dbc.columnsV where databasename =  :TableDb and tablename = :TableName
+union
+select 20000, 'from ' || trim(databasename) || '.' || trim(tablename) || ';'
+from dbc.tablesV where databasename =  :TableDb and tablename = :TableName
+) x order by SeqNo
+;);
+eof
+echo 40% complete
+sql ${TdBenchServer} COMMENT on macro  ${TdBenchDb}.CreateViewLong as 'Creates a view will all columns explicitly selected for a View DB, Table DB and TableName';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.CopyTables(FromDb varchar(128), Todb varchar(128)) as
+(
+Select 'create table ' || trim(:ToDb) || '.' || trim(tablename) ||
+'  as ' || trim(:FromDB) || '.' || trim(tablename) || ' with data and statistics;'
+from dbc.tablesV 
+where databasename = :FromDb 
+and tablekind in ( 'T','O') 
+order by 1
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro  ${TdBenchDb}.Copytables as 'Creates statements to copy all tables with data and stats from one db to another';
+
+sql ${TdBenchServer} delim=eof
+REPLACE  macro ${TdBenchDb}.CountValues(db varchar(128), tbl varchar(128)) as (
+select 'select ''' || trim(columnname) || ''' (varchar(128)), count(*) from ' || 
+'(select ' || trim(columnname) || ', count(*) as cnt from ' ||
+trim(databasename) || '.' || trim(tablename) || ' group by 1) x union '
+from dbc.columnsV 
+where databasename = :db and tablename = :tbl 
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro ${TdBenchDb}.CountValues as 'Creates script to count number of values in each column.';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.CopyStats (FromDb varchar(128), FromTbl varchar(128), ToDb varchar(128), ToTbl varchar(128)) as (
+select 'collect statistics on ' || :toDb || '.' || :ToTbl || ' column(' || trim(c1.columnname) || ') from ' || :FromDb || '.' || :FromTbl || ' column(' || trim(c1.columnname) || ');'
+from dbc.columns c1 join dbc.columns c2
+on c1.columnname = c2.columnname
+where c1.databasename = :FromDb
+and c1.tablename = :FromTbl
+and c2.databasename = :ToDb
+and c2.tablename = :ToTbl
+order by c1.columnid
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro ${TdBenchDb}.CopyStats 'copy stats from a database, table to a database, table based on the column list of the to table';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.CollectStatisticsColumns( TheDB (varchar(128), default '*'), TheTbl (varchar(128), default '*')) as (
+select 'collect statistics on '  || trim(databasename) || '.' || trim(tablename) || ' column(' || trim(columnname) || ');' (title ''), sSize 
+from dbc.columnsV,
+(select databasename sDb, tablename sTbl, sum(currentperm) sSize from dbc.tablesizeV group by 1,2) tblsize
+where (databasename = :TheDB or (:TheDB = '*' and databasename in (select child from dbc.childrenV where parent = :TheTbl)))
+and (tablename like :TheTbl or :TheTbl=Tablename or :TheTbl = '*' or :TheDB='*')
+and (databasename,tablename) in (select databasename, tablename from dbc.tablesV where tablekind in ('T', 'O'))
+and databasename = sDb and Tablename = sTbl
+order by 1
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro  ${TdBenchDb}.CollectStatisticsColumns as 'For (database,table) or (database,) or (,parentdatabase) will generate collect statistics statements for all columns';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.CollectStatisticsIndexes( TheDB (varchar(128), default '*'), TheTbl (varchar(128), default '*')) as (
+with recursive clist(db, tbl, ino, cno, cols) as
+(select trim(root.databasename), trim(root.tablename), 
+root.indexnumber, root.columnposition, trim(root.columnname) (varchar(200))
+from dbc.indicesV root
+where (root.databasename = :TheDB or (:TheDB = '*' and databasename in (select child from dbc.childrenV where parent = :TheTbl)))
+and (root.tablename like :TheTbl or root.tablename = :TheTbl or :TheTbl = '*' or :TheDB = '*')
+and root.columnposition = 1
+union all
+select trim(child.databasename), trim(child.tablename), 
+child.indexnumber, child.columnposition, parent.cols || ',' || trim(child.columnname)
+from dbc.indicesV child, clist as parent
+where child.databasename = parent.db
+and child.tablename = parent.tbl
+and child.indexnumber = parent.ino
+and child.columnposition = parent.cno + 1
+)
+select 'collect statistics on '  || db || '.' || tbl || ' index(' || cols || ');' (title ''), sSize
+from clist, 
+(select databasename sDb, tablename sTbl, sum(currentperm) sSize from dbc.tablesizeV group by 1,2) tblsize
+where cno in
+(select max(columnposition) from dbc.indicesV dbi
+where clist.db = dbi.databasename
+and clist.tbl = dbi.tablename
+and clist.ino = dbi.indexnumber)
+and db  = sDb and tbl = sTbl
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro  ${TdBenchDb}.CollectStatisticsIndexes as 'For (database,table) or (database,) or (,parentdatabase) will generate collect statistics statements for all indexes';
+
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.CreateIndex(DropOrCreate (varchar(10), default 'Create'), TheDB (varchar(128), default '*'), TheTbl (varchar(128), default '*')) as (
+with recursive clist(db, tbl, ino, cno, cols) as
+(select trim(root.databasename), trim(root.tablename), 
+root.indexnumber, root.columnposition, trim(root.columnname) (varchar(200))
+from dbc.indicesV root
+where (root.databasename = :TheDB or (:TheDB = '*' and databasename in (select child from dbc.children where parent = :TheTbl)))
+and (root.tablename like :TheTbl or :TheTbl = '*' or :TheDB = '*')
+and root.columnposition = 1
+and root.indexnumber > 1
+union all
+select trim(child.databasename), trim(child.tablename), 
+child.indexnumber, child.columnposition, parent.cols || ',' || trim(child.columnname)
+from dbc.indicesV child, clist as parent
+where child.databasename = parent.db
+and child.tablename = parent.tbl
+and child.indexnumber = parent.ino
+and child.columnposition = parent.cno + 1
+)
+select :DropOrCreate || ' index (' || cols || ') on ' || db || '.' || tbl || ';' (title '')
+from clist
+where cno in
+(select max(columnposition) from dbc.indices dbi
+where clist.db = dbi.databasename
+and clist.tbl = dbi.tablename
+and clist.ino = dbi.indexnumber)
+;);
+eof
+echo 60% complete
+sql ${TdBenchServer} COMMENT on macro  ${TdBenchDb}.CreateIndex as 'For (opt, database, table) or (opt, database,) or (opt,parentdatabase) will generate drop or create index statements based on opt';
+
+sql ${TdBenchServer} delim=eof
+REPLACE  macro ${TdBenchDb}.ReblockTables(TheDB (varchar(128), default '*'), TheTbl (varchar(128), default '*')) as
+(select 'alter table ' || trim(databasename)  || '.' || trim(tablename)  || ', datablocksize=127.5 Kbytes immediate;' (title '')
+from dbc.tablesV
+where (databasename = :TheDB or (:TheDB = '*' and databasename in (select child from dbc.childrenV where parent = :TheTbl)))
+and (tablename like :TheTbl or :TheTbl = '*' or :TheDB = '*')
+and tablekind in ('T', 'O')
+order by 1
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro  ${TdBenchDb}.ReblockTables as 'For (database, table) or (database,) or (,parentdatabase) will generate alter table to reblock';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.RowCount(TheDB (varchar(128), default '*'), TheTbl (varchar(128), default '*')) as (
+select  'select databasename, tablename, rowcnt , ' ||
+'sum(currentperm) as space, ' ||
+'round( 1- cast(sum(currentperm) as float)/(count(*) * max(currentperm)),2) as "skew"  ' ||
+'from dbc.tablesizeV, ' ||
+'(select count(*)(bigint) as rowcnt from ' || trim(databasename) || '.' || trim(tablename)  || ') x ' ||
+'where databasename = ''' || trim(databasename) || ''' and tablename = ''' || trim(tablename) ||  '''  group by 1,2,3 union  ' (title '')
+from dbc.tablesV 
+where (databasename = :TheDB or (:TheDB = '*' and databasename in (select child from dbc.childrenV where parent = :TheTbl)))
+and (tablename like :TheTbl or :TheTbl = '*' or :TheDB = '*')
+and tablekind in ('T', 'O')
+order by 1
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro  ${TdBenchDb}.RowCount as 'For database (database,table) or (database,) or (,parentdatabase) will generate row count and table size select statements';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.amps as (select * from table(syslib.monitorvirtualResource()) as x order by 1
+; );
+eof
+sql ${TdBenchServer} COMMENT on macro ${TdBenchDb}.amps as 'Select performance information from all AMPs currently active';
+
+sql ${TdBenchServer} delim=eof
+REPLACE  macro ${TdBenchDb}.steps(sess integer,vproc smallint) as (select * from table (syslib.monitorsqlsteps(1,:sess,:vproc)) as x order by 3
+; );
+eof
+sql ${TdBenchServer} COMMENT on macro ${TdBenchDb}.steps as 'Select all steps for a sessionid on a vprocid';
+
+sql ${TdBenchServer} delim=eof
+REPLACE  macro ${TdBenchDb}.queryband (sess integer) as (select syslib.MONITORQUERYBAND(1,:sess,0)
+; );
+eof
+echo 80% complete
+sql ${TdBenchServer} COMMENT on macro ${TdBenchDb}.queryband as 'Select queryband information for a sessionid';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.sessions as (select * from table (syslib.monitorsession(-1,'*',0)) as x order by pestate, username
+; );
+eof
+sql ${TdBenchServer} COMMENT on macro ${TdBenchDb}.sessions as 'Select monitor details of all active sessions';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.sessionsum as (locking row for access select
+pestate, ampstate, wlcid, rulename, count(*), sum(reqcpu) ReqCpu
+from table (syslib.monitorsession(-1,'*',0)) as x  join tdwm.ruledefs on wlcid = ruleid  and removedate = 0 group by 1,2,3,4 order by 1,2,3,4
+; );
+eof
+sql ${TdBenchServer} COMMENT on macro ${TdBenchDb}.sessionsum 'Summarize session information from monitor showing active sessions and workload name';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.nodes as (select * from table(syslib.monitorPhysicalResource()) as x order by 1
+; );
+eof
+sql ${TdBenchServer} COMMENT on macro ${TdBenchDb}.nodes as 'Select monitor details of all active/standby/down nodes';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.nodesum as (
+select status, netaup, netbup, count(*) nodes, AmpCount, pecount,
+  average(cpuuse) AveCpu,
+  max(cpuuse) MaxCpu, average(diskuse) AveDisk, max(diskuse) MaxDisk 
+from table(syslib.monitorPhysicalResource()) as x 
+group by 1,2,3,5,6 
+order by 1,2,3,5,6
+; );
+eof
+sql ${TdBenchServer} COMMENT on macro ${TdBenchDb}.nodesum as 'Summarize nodes by status, average/max cpu, etc';
+
+sql ${TdBenchServer} delim=eof
+REPLACE  macro ${TdBenchDb}.querytext (sess integer, vproc smallint) as (select * from table (syslib.MONITORSQLTEXT (1,:sess,:vproc)) as x order by 3
+; );
+eof
+sql ${TdBenchServer} COMMENT on macro ${TdBenchDb}.querytext as 'Select current query text for a sessionid running on a vproc ID';
+
+sql ${TdBenchServer} delim=eof
+REPLACE macro ${TdBenchDb}.List as
+(
+select tablename, 
+case tablekind when 'M' then 'Macro' when 'V' then 'View' when 'T' then 'Table' else 'Other' end (title 'Type'), 
+commentstring 
+from dbc.tablesV 
+where databasename = database 
+order by 1
+;);
+eof
+sql ${TdBenchServer} COMMENT on macro ${TdBenchDb}.List as 'List out the comments for all macros in the benchmark databasename';
+echo 100% complete
+trace save logs/teradata_utility_macros.log

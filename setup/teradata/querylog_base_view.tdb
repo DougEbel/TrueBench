@@ -1,0 +1,43 @@
+@echo off
+# This script will create basic views for the primary DBQL tables when no PDCR is in use
+
+include prompt_for_db.tdb
+if :setup_error is set then goto end_script
+
+set eyecatch = -----------------
+echo :eyecatch  Creating  dbqlogtbl base view :eyecatch  
+sql :bench_server delim=eof
+replace view :bench_schema.dbqlogtbl as
+select tt.RunId, tt.TestName, tt.StartTime as TestStartTime,
+ql.*,
+cast(ql.collecttimestamp as date) LogDate
+from dbc.dbqlogtbl ql join :bench_schema.TestTracking tt
+on ql.starttime between tt.StartTime and tt.StopTime;
+
+COMMENT ON VIEW :bench_schema.dbqlogtbl AS 'One row for every query within a RunID from dbc.dbqlogtbl';
+eof
+
+# DBQL query logging enabled with: replace query logging on all with all
+include querylog_base_view_dbql.tdb dbqlsqltbl 'SQL statements for every query within a RunID from dbc.dbcsqltbl'
+include querylog_base_view_dbql.tdb dbqlobjtbl 'Tables, views, columns for every query within a RunID from dbc.dbqlsqltbl'
+include querylog_base_view_dbql.tdb dbqlexplaintbl 'Explain plan for every query within a RunID from dbc.dbqlexplaintbl'
+include querylog_base_view_dbql.tdb dbqlsteptbl 'Every step executed for every query within a RunID from dbc.dbqlsteptbl'
+
+# resusage tables enabled with the ctl utility on one of the nodes.
+# Make sure the logging interval will create multiple rows within the duration of the test.
+# For benchmarking, 30 or 60 seconds is better than once every 10 minutes default (600 seconds)
+include querylog_base_view_resusage.tdb ResUsageIpma  ' RSS data related to the performance of an entire node.'
+include querylog_base_view_resusage.tdb ResUsageSawt  ' RSS data collected for the AMP Worker Tasks (AWT)'
+include querylog_base_view_resusage.tdb ResUsageScpu  ' RSS data collected on a per CPU basis.'
+include querylog_base_view_resusage.tdb ResUsageSldv  ' RSS data collected for logical (disk) devices.'
+include querylog_base_view_resusage.tdb ResUsageSmhm  ' RSS data collected for mhm (Multiple Hash Maps).'
+include querylog_base_view_resusage.tdb ResUsageSpdsk  ' RSS data collected for PDISK devices.'
+include querylog_base_view_resusage.tdb ResUsageSpma  ' tracks the performance of an entire node, independent of the actual applications running.'
+include querylog_base_view_resusage.tdb ResUsageSps  ' RSS data collected for the PGs from the priority scheduler and other areas.'
+include querylog_base_view_resusage.tdb ResUsageSvdsk  ' RSS data collected for VDISK devices.'
+include querylog_base_view_resusage.tdb ResUsageSvpr  'RSS data collected for each virtual processor on the node.'
+
+label end_script
+
+
+

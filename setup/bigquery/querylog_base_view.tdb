@@ -1,0 +1,89 @@
+@echo off
+# ----------------------------------------------------------------------
+# querylog_base_view.tdb
+#
+# This example creates a base view to join TrueBench TestTracking to BigQuery
+# query history / job metadata. It may need editing based on the DBMS release
+# and platform options selected.
+#
+# View created:
+#   :bench_schema.QueryLog_Base
+#
+# Purpose:
+# - Provide a stable base view for reporting by RunId and QueryName
+# - Avoid embedding complex query log join logic in README.md examples
+#
+# Notes:
+# - Query log sources and retention vary by platform configuration.
+# - QueryName is extracted from QueryText when insert_query_name=yes embeds:
+#     tdb=<qname> via the TrueBench PROFILE command
+# ----------------------------------------------------------------------
+
+include prompt_for_db.tdb
+if :setup_error is set then goto end_script
+
+echo Creating view :bench_schema.QueryLog_Base ...
+
+sql :bench_server delim=eof
+
+create or replace view :bench_schema.QueryLog_Base as
+select
+    tt.RunId,
+    tt.TestName,
+    tt.Description,
+    tt.StartTime as TestStartTime,
+    tt.StopTime  as TestStopTime,
+
+    -- BigQuery job identifiers
+    j.job_id as JobId,
+    j.user_email as UserEmail,
+
+    -- Job timing
+    j.creation_time as JobCreateTime,
+    j.start_time    as JobStartTime,
+    j.end_time      as JobEndTime,
+
+    -- SQL text
+    j.query as QueryText,
+
+    -- Extract QueryName from embedded identifier inserted by TrueBench
+    -- Expected string pattern: tdb=<qname>
+    case
+      when strpos(j.query, 'tdb=') > 0 then
+        substr(
+          j.query,
+          strpos(j.query, 'tdb=') + 4,
+          case
+            when strpos(substr(j.query, strpos(j.query, 'tdb=') + 4), ' ') > 0 then
+              strpos(substr(j.query, strpos(j.query, 'tdb=') + 4), ' ') - 1
+            when strpos(substr(j.query, strpos(j.query, 'tdb=') + 4), '*/') > 0 then
+              strpos(substr(j.query, strpos(j.query, 'tdb=') + 4), '*/') - 1
+            else
+              128
+          end
+        )
+      else null
+    end as QueryName,
+
+    -- Performance / resource metrics
+    cast(j.total_bytes_processed as int64) as TotalBytesProcessed,
+    cast(j.total_bytes_billed as int64) as TotalBytesBilled,
+    cast(j.total_slot_ms as int64) as TotalSlotMs,
+    j.cache_hit as CacheHit
+
+from
+    :bench_schema.TestTracking tt
+join
+    region-us.INFORMATION_SCHEMA.JOBS_BY_PROJECT j
+  on
+    j.start_time between tt.StartTime and tt.StopTime
+where
+    j.job_type = 'QUERY'
+    and j.statement_type is not null
+;
+
+eof
+
+if :errorcode != 0 then echo ERROR - creation of :bench_schema.QueryLog_Base failed
+
+label end_script

@@ -1,0 +1,83 @@
+------------------------- Help for tdbench_teradata.tdb -------------------------
+
+This file sets up the DBMS specific settings for TdBench and is run by tdbench.tdb either based on the 
+TdBench_DBMS environment variable set in tdbench_config.sh or tdbench_config.bat or based on the
+-d parameter on the TdBench command line.
+
+The usual commands in this file:
+
+CLASS      - allows TdBench to load a JDBC driver for use with any database
+
+DB         - provides the URL or IP address, user, password and optional parameters to
+             logon to a database. Tip: Sometimes you can create one DB connection for
+             benchmark development and execution, and one with higher privledges for use
+             interactively during development to grant access.
+
+BEFORE_RUN - These run before and after each run.  They can be used to update a table
+AFTER_RUN    on the host DBMS with the runid and starttime and after the test to update
+             the ending time to make it easy to select host DBMS query log records
+
+AFTER_NOTE - This specifies a statement to be executed after the NOTE command is used
+             to document a run on TdBench's internal H2 database to apply to the 
+             TestTracking table on the host DBMS.
+
+Each JDBC driver has its own set of parameters.  The folowing assumes you have the 
+the latest terajdbc4.jar from downloads.teradata.com.  (A convience copy is included in
+the TdBench distribution zip file)
+
+The syntax of the TdBench class statement is:
+   CLASS   [class-name-of-JDBC-driver] [URL-of-JDBC-driver] [file-name(s)-of-JDBC-driver-jar]
+
+For terajdbc4.jar, this is:
+   class com.teradata.jdbc.TeraDriver jdbc:teradata terajdbc4.jar
+
+The syntax of the DB statement is:
+   DB  [db-alias-name] [URL-of-JDBC-driver:dbms-address] {username {password}}
+
+You may want to have  multiple DB statements for:
+- different platforms (test, dev, prod) or
+- different privledged (acme, acmedbc) or
+- different worker sessions
+
+Details:
+   db-alias-name  - can be any string you want. Some might use: prod1, prod2. 
+                    This string is used in the WORKER and SQL statements.
+
+   URL-of-JDBC-driver - this is always: jdbc:teradata
+
+   dbms-address - can be an IP address or a URL. This can be followed with a
+                  / and multiple options (shown below)
+
+   username - logon id that will be used by the SQL or WORKER statements
+
+   password - password that will be used by the SQL or WORKER statements
+
+The most common error in defining the DBMS connections for TdBench are mistakes
+in the DBMS address, username and password or executing on a server that is blocked
+by firewall settings or network topography. Test the dbms-address, username, and 
+password with another utility you know on the server where TdBench is installed.
+
+Note that the username and password can be overriden by the SQL and WORKER statements 
+which is especially important during setup because the host TdBenchDB user may not have
+been created. (The setup scripts will do this override for you). This overriding is 
+also useful to allow one DB statement to be used as a template to logon multiple
+workers with different logon IDs representing different workloads. 
+
+While the password can be hard coded into the DB statement for development or benchmark
+usage, best security practices would use environment variables retrieved from a secure
+storage or prompted either in the ...config.sh/...config.bat and referenced something
+like ${mypassword}, or prompted in the tdbench.tdb and referenced something like :mypassword.
+
+You can follow the dbms-address with a / and additional parameters, separated by comma. Some
+examples are:
+   ACCOUNT=account-name ... account to be charged with usage
+   CHARSET=charset-name ... examples: ASCII, UTF8, UTF16
+   DATABASE=database-name ... default database
+   LOG=option ... ERROR is default. Other options: INFO and DEBUG
+   NEW_PASSWORD=password ... will change password, but only 1 session is allowed
+   TMODE=option ... transaction mode: ANSI or TERADATA
+
+(Note that the default database can also be defined on Vantage based on the User ID
+or in the TdBench scripts with the BEFORE_WORKER statements). 
+
+For help on the TdBench commands referenced above, exit SETUP and issue help [ command ]

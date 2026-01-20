@@ -1,0 +1,22 @@
+This is the version history for the TdBench setup/teradata_lake.
+8.01.01 - 2024-10-04
+- moved setup to tdb scripts executed under the SETUP command in TdBench
+
+8.01.01 - 2024-07-01
+- added reporting against Vantage Lake's TD_Metric_SVC storage of DBQL & Resusage.
+- added path variables to all views to allow year/month/day filtering of cloud files
+- Adjusted rptsumruns view and added TestTrackingV to create path constraints
+- Fixed TestStop to support tests longer than 9999 seconds (2 hr 46 minutes)
+
+8.0.16 - 2018-11-12
+- added RunID of the client into reporting views for DBQL and Resusage
+- changed file suffixes for command files from .cmd to .tdb to avoid issues with
+  e-mail systems stripping out files that look like Windows shell commands 
+  containing viruses.   
+- Added utility macros, previously distributed in TdBench 7.xx but omitted from
+  initial release of setup.
+- Added reporting macro RptQueryInFlight
+
+8.00.11 - 2018-09-20
+- Initial release of automated install scripts of Teradata DBMS setup under 8.0
+  Previously, needed to install TdBench 7.xx first. 

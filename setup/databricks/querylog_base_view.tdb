@@ -1,0 +1,93 @@
+@echo off
+# ----------------------------------------------------------------------
+# querylog_base_view.tdb
+#
+# This example creates a base view to join TrueBench TestTracking to Databricks
+# SQL query history / monitoring sources. It may need editing based on the
+# Databricks workspace configuration, SQL warehouse type, and privileges.
+#
+# Multiple query history sources exist in Databricks environments. This sample
+# assumes availability of INFORMATION_SCHEMA query history views. In some
+# environments you may need to use system tables, Unity Catalog system views,
+# or platform-specific audit/log exports.
+#
+# View created:
+#   :bench_schema.QueryLog_Base
+#
+# Purpose:
+# - Provide a stable base view for reporting by RunId and QueryName
+# - Avoid embedding complex Databricks monitoring joins in README.md examples
+#
+# Notes:
+# - QueryName is extracted from QueryText when insert_query_name=yes embeds:
+#     tdb=<qname> via the TrueBench PROFILE command
+# - If your Databricks environment does not expose query history views to SQL,
+#   you may need to implement log export (audit/event logs) into tables and
+#   adapt this view accordingly.
+# ----------------------------------------------------------------------
+
+include prompt_for_db.tdb
+if :setup_error is set then goto end_script
+
+echo Creating view :bench_schema.QueryLog_Base ...
+
+sql :bench_server delim=eof
+
+create or replace view :bench_schema.QueryLog_Base as
+select
+    tt.RunId,
+    tt.TestName,
+    tt.Description,
+    tt.StartTime as TestStartTime,
+    tt.StopTime  as TestStopTime,
+
+    -- Query identity / timing
+    qh.query_id   as QueryId,
+    qh.start_time as QueryStartTime,
+    qh.end_time   as QueryEndTime,
+
+    -- Context
+    qh.user_name  as UserName,
+    qh.warehouse_id as WarehouseId,
+
+    -- SQL text
+    qh.query_text as QueryText,
+
+    -- Extract QueryName from embedded identifier inserted by TrueBench
+    -- Expected string pattern: tdb=<qname>
+    case
+      when instr(qh.query_text, 'tdb=') > 0 then
+        substring(
+          qh.query_text,
+          instr(qh.query_text, 'tdb=') + 4,
+          case
+            when instr(substring(qh.query_text, instr(qh.query_text, 'tdb=') + 4), ' ') > 0 then
+              instr(substring(qh.query_text, instr(qh.query_text, 'tdb=') + 4), ' ') - 1
+            else
+              128
+          end
+        )
+      else null
+    end as QueryName,
+
+    -- Selected performance/resource metrics (availability varies by view source)
+    qh.total_duration_ms      as TotalDurationMs,
+    qh.execution_duration_ms  as ExecutionDurationMs,
+    qh.rows_produced          as RowsProduced
+
+from
+    :bench_schema.TestTracking tt
+join
+    system.information_schema.query_history qh
+  on
+    qh.start_time between tt.StartTime and tt.StopTime
+where
+    -- Prefer to filter to benchmark queries if possible
+    (qh.query_text like '%tdb=%')
+;
+
+eof
+
+if :errorcode != 0 then echo ERROR - creation of :bench_schema.QueryLog_Base failed
+
+label end_script

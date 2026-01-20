@@ -1,0 +1,37 @@
+------------------------- Help for tdbench_config.sh  -------------------------
+
+With TdBench 8.01.02, there is increased support for doing benchmarks with multiple DBMSs. 
+As a result, there may be multiple config.sh scripts. tdbench_config.sh is the "parent".
+
+Example:
+   tdbench_config.sh - defines the jar version and the default TdBench_DBMS
+      tdbench_teradata_config.sh - sets up environment variables for scripts to be used with this DBMS
+      tdbench_snowflake_config.sh - sets up environment variables for a different DBMS
+      ...
+
+A few of the environment variables are used by the setup, however you can reference environment
+variables using the same type of syntax used in Linux.  Example: In your ...config.sh you could have:
+
+read -p "Enter your password: " mypassword
+
+and in your TdBench scripts, reference that variable as:  ${mypassword}
+... the same syntax is used by TdBench scripts on Windows making your scripts portable. 
+
+Environment variables could be used to specify the path of the SQL scripts that have been 
+adapted for each vendor DBMS. The ...config.sh scripts could be used to clean up files from
+prior tests or stage fresh data for ETL programs you run using the OS command. 
+
+The default environment variables in tdbench_config.sh are:
+
+TdBench_jar_version - If you've downloaded updated TdBench software, this tells which one you 
+   intend to use. If this is not specified and there is more than one, tdbench.sh will prompt
+   you each time on which one you want to use.
+
+TdBench_DBMS - This tells the default DBMS being used.  The setting can be overridden with
+   the -d parameter on tdbench.sh.  The major use of this is for the SETUP command  to find the 
+   scripts for the DBMS and for this script to determine which vendor specific ...config.sh to run.  
+   For example, if you put on the tdbench.sh command line:
+      -d snowflake
+   the setting for TdBench_DBMS will be overridden and tdbench_config.sh will execute:
+       tdbench_snowflake_config.sh
+

@@ -1,0 +1,23 @@
+@echo off
+
+# This script can be called by other setup scripts to set variables used to execute SQL statements.
+# Prompting for the :bench_server and :bench_schema values would be prompted once per TrueBench execution.
+# You would need to add a script or option to reset their value or restart TrueBench to change their value.
+ 
+if setup_error is set then set setup_error =
+
+if :bench_server not set then read bench_server Enter the database alias for setup to use: 
+if :bench_server not set then do
+   echo ERROR - without the alias name saved in bench_server variable, setup can not continue
+   set setup_error = true
+   goto end_script
+end
+
+if :bench_schema not set then read bench_schema Enter the schema/container name for TestTracking and related reporting views: 
+if :bench_schema not set then do
+   echo ERROR - without the schema/container name saved in the bench_schema variable, setup can not continue
+   setup_error = true
+   goto end_script
+end
+ 
+label end_script

@@ -1,0 +1,16 @@
+set validate_variables = true
+if ${TdBench_DBMS} is set then goto step1ok
+echo ERROR: TdBench_DBMS variable was not set.  Edit tdbench_config.sh to update that export statement
+set validate_variables = false
+
+label step1ok
+if ${TdBenchServer} is set then goto step2ok
+echo ERROR: TdBenchServer variable is not set for the database (DB) conection. Edit tdbench_teradata_lake_config.sh to update that export statement
+set validate_variables = false
+
+label step2ok
+if ${TdBenchDb} is set then goto step3ok
+echo ERROR: TdBenchDb variable is not set for the database/user for host reporting.  Edit tdbench_teradata_lake_config.sh to update that export statement
+set validate_variables = false
+
+label step3ok

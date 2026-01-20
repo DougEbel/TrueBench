@@ -1,0 +1,949 @@
+echo Staring definition of reporting hierarchy .
+
+sql ${TdBenchServer} delim=eof
+REPLACE VIEW ${TdBenchDb}.ql AS
+LOCKING ROW FOR ACCESS
+SELECT 
+	'"' || oreplace(oreplace(ql.QueryText, '"' ' '), chr(10), ' ') || '"' AS QueryText
+	,ql.Username
+	,ql.StartTime
+        ,ql.FirstRespTime
+	,${TdBenchDb}.TimestampSubtract(ql.FirstRespTime, ql.StartTime) AS RunSecs
+	,ql.NumResultRows
+	,ql.TotalIoCount
+	,ql.AmpCpuTime
+        ,ql.PC_AmpCpuTime
+        ,ql.CC_AmpCpuTime
+	,ql.SpoolUsage
+        ,ql.PC_NumOfActiveAmps
+	,1 - ql.PC_AmpCpuTime/NULLIFZERO(ql.PC_NumOfActiveAmps * ql.PC_MaxAmpCpuTime)  AS PC_CpuSkew
+        ,ql.CC_NumOfActiveAmps
+        ,1 - ql.CC_AmpCpuTime/NULLIFZERO(ql.CC_NumOfActiveAmps * ql.CC_MaxAmpCpuTime)  AS CC_CpuSkew
+        ,ql.NosTables
+        ,ql.NosFiles
+        ,ql.NosPhysReadIOKB
+        ,ql.NosPhysWriteIOKB
+	,ql.ERRORCODE
+	,ql.ErrorText
+	,ql.ParentQueryId
+	,ql.SessionId
+	, ql.Path_Year
+	, ql.Path_Month
+	, ql.Path_Day
+        , ql.Path_Hour
+FROM 
+	 
+    ${TdBenchDb}.DBQLogV_sum ql
+;
+
+eof
+
+sql ${TdBenchServer} COMMENT ON VIEW ${TdBenchDb}.ql AS 'Simplification of TD_METRIC_SVC.DBQLogV table for analysis of execution of queries and macros. Use constraints Username=?, QueryText LIKE, or StartTime BETWEEN. and PATH_YEAR=,PATH_MONTH=,PATH_DAY=';
+
+
+sql ${TdBenchServer} delim=eof
+REPLACE VIEW  ${TdBenchDb}.qls AS
+LOCKING ROW FOR ACCESS
+SELECT 
+	'"' || ql.QueryText || '"' AS QueryText
+	,qls.StepLev1Num + .1 * qls.StepLev2Num (Decimal(4,1)) AS sNum
+	,qls.StepName AS Stp
+	,${TdBenchDb}.TimestampSubtract(qls.StepStartTime, ql.StartTime) AS sStart
+	,${TdBenchDb}.TimestampSubtract(qls.StepStopTime, qls.StepStartTime) AS sElapse
+	,sElapse/NULLIFZERO(${TdBenchDb}.TimestampSubtract(ql.FirstRespTime, ql.StartTime)) AS pctRun
+	,qls.EstProcTime
+	,qls.CPUTime
+	,qls.IOcount
+	,qls.RowCount
+	,qls.RowCount/NULLIFZERO(qls.EstRowCount) AS RowVsEst
+	,qls.RowsWComprColumns/NULLIFZERO(qls.RowCount) AS CompPct
+	,1 - qls.CpuTime/NULLIFZERO(qls.NumOfActiveAmps * qls.MaxAmpCpuTime)  AS CpuSkew
+	,1 - qls.SpoolUsage/NULLIFZERO(qls.NumOfActiveAmps * qls.MaxAmpSpool) AS SpoolSkew
+	,qls.QueryId
+	,qls.MaxCPUAmpNumber
+	,qls.MaxSpoolAmpNumber
+	,qls.StepStartTime
+	, ql.Path_Year
+	, ql.Path_Month
+	, ql.Path_Day
+        , ql.path_Hour
+FROM
+	TD_METRIC_SVC.DBQLStepV qls join  ${TdBenchDb}.ql ql
+        on qls.ParentQueryId=ql.ParentQueryId and ql.Path_Year = qls.Path_Year and ql.Path_Month = qls.Path_Month and ql.Path_Day = qls.Path_Day
+;
+eof
+echo 20% complete
+sql ${TdBenchServer} COMMENT ON VIEW ${TdBenchDb}.qls AS 'Analysis of the steps of a query within the context of the logged query. Use with constraints on QueryId and PATH_YEAR=,PATH_MONTH=,PATH_DAY=.';
+
+sql ${TdBenchServer} delim=eof
+REPLACE VIEW ${TdBenchDb}.RptTestDetail AS
+SELECT
+ tt.RunId
+ ,tt.ClientRunId
+ ,tt.TestName
+ ,tt.StartTime
+ ,substring(qlog.PATH_COMPONENT_ID FROM 1 FOR 3) ClusterType
+ ,qlog.SessionId
+ ,case
+     when qlog.querytext like '%exec%benchmark.%' or qlog.querytext like '%call%benchmark.%' or qlog.querytext like '%/*%tdb=%*/%' then ${TdBenchDb}.ExtractBenchQname(qlog.querytext)
+         when qlog.queryband like '%tdb=%' then ${TdBenchDb}.ExtractBenchQname(qlog.queryband)
+         else '' end as QueryName
+ ,case
+     when qlog.querytext like '%/*%tdb=%.%*/%' then ${TdBenchDb}.ExtractBenchQSubname(qlog.querytext)
+         when qlog.queryband like '%tdb=%.%' then ${TdBenchDb}.ExtractBenchQSubname(qlog.queryband)
+         else '' end as QueryStepName
+ ,${TdBenchDb}.TimestampSubtract(qlog.FirstRespTime, tt.StartTime) AS RunSecs
+ ,${TdBenchDb}.TimestampSubtract(qlog.StartTime, tt.ReleaseExecTime) AS StartSecs
+ ,qlog.NumResultRows 
+ ,qlog.TotalIoCount
+ ,qlog.AmpCpuTime
+ ,qlog.ParserCPUTime 
+ ,qlog.AmpCpuTime + ParserCpuTime AS CpuTime
+ ,1 - qlog.AmpCpuTime/NULLIFZERO(qlog.NumOfActiveAmps * qlog.MaxAmpCpuTime) AS CpuSkew
+ ,qlog.SpoolUsage
+ ,${TdBenchDb}.TimestampSubtract(qlog.FirstStepTime, qlog.StartTime) AS ParseQueueSecs
+ ,CASE
+  WHEN qlog.FirstResptime < tt.ReportingStopTime THEN 'Y'
+  ELSE 'N'
+ END AS FinishInTime
+ ,qlog.ParentQueryId  AS ParentQueryId
+ ,qlog.ERRORCODE
+ ,qlog.ErrorText
+ ,'"' || oreplace(oreplace(substring(qlog.QueryText from 1 for 8000),  chr(10), ' '),'"',' ') || '"' AS QueryText
+ ,qlog.Username
+ ,qlog.UtilityRowCount
+ ,qlog.CacheFlag
+, qlog.QueryBand
+, qlog.WDID
+, qlog.FinalWDID
+, qlog.TDWMEstTotalTime
+, qlog.RequestNum
+, qlog.InternalRequestNum
+, qlog.DelayTime
+, qlog.ReqIOKB
+, qlog.ReqPhysIO
+, qlog.ReqPhysIOKB
+,cast(qlog.Path_Year as char(4)) Path_Year
+,cast(qlog.Path_Month as char(2)) Path_Month
+,cast(qlog.Path_Day as char(2)) Path_day
+FROM
+ ${TdBenchDb}.TestTracking tt join TD_Metric_SVC.DBQLOGV qlog
+on qlog.starttime between tt.StartTime and ActualStopTime
+eof
+
+sql ${TdBenchServer} COMMENT ON VIEW ${TdBenchDb}.RptTestDetail AS 'Detailed query execution listed in context of a RunId. Use with constraints RunId=? or RunId IN ( ) and path_year, path_month, path_day.';
+
+
+sql ${TdBenchServer} delim=eof
+REPLACE VIEW ${TdBenchDb}.RptTestCluster AS 
+SELECT 
+ qlog.RunId
+ ,qlog.ClientRunId
+ ,qlog.TestName
+ ,qlog.StartTime
+ ,qlog.SessionId  
+ ,case 
+     when qlog.querytext like '%exec%benchmark.%' or qlog.querytext like '%call%benchmark.%' or qlog.querytext like '%/*%tdb=%*/%' then ${TdBenchDb}.ExtractBenchQname(qlog.querytext)
+	 when qlog.queryband like '%tdb=%' then ${TdBenchDb}.ExtractBenchQname(qlog.queryband)
+	 else '' end as QueryName
+ ,case 
+     when qlog.querytext like '%/*%tdb=%.%*/%' then ${TdBenchDb}.ExtractBenchQSubname(qlog.querytext)
+	 when qlog.queryband like '%tdb=%.%' then ${TdBenchDb}.ExtractBenchQSubname(qlog.queryband)
+	 else '' end as QueryStepName	 
+ ,${TdBenchDb}.TimestampSubtract(qlog.FirstRespTime, qlog.StartTime) AS RunSecs
+ ,${TdBenchDb}.TimestampSubtract(qlog.StartTime, qlog.ReleaseExecTime) AS StartSecs
+ ,qlog.NumResultRows
+ ,qlog.TotalIoCount 
+ ,qlog.AmpCpuTime
+ ,qlog.PC_ParserCPUTime + qlog.CC_ParserCPUTime as ParserCPUTime
+ ,qlog.AmpCpuTime + ParserCpuTime AS CpuTime
+ ,qlog.PC_AmpCpuTime
+ ,qlog.CC_AmpCpuTime
+ ,1 - qlog.PC_AmpCpuTime/NULLIFZERO(qlog.PC_NumOfActiveAmps * qlog.PC_MaxAmpCpuTime) AS PC_CpuSkew
+ ,1 - qlog.CC_AmpCpuTime/NULLIFZERO(qlog.CC_NumOfActiveAmps * qlog.CC_MaxAmpCpuTime) AS CC_CpuSkew
+ ,qlog.SpoolUsage
+ ,${TdBenchDb}.TimestampSubtract(qlog.FirstStepTime, qlog.StartTime) AS ParseQueueSecs
+ ,CASE 
+  WHEN qlog.FirstResptime < qlog.ReportingStopTime THEN 'Y'
+  ELSE 'N' 
+ END AS FinishInTime
+ ,qlog.ParentQueryId  AS ParentQueryId
+ ,qlog.ERRORCODE
+ ,qlog.ErrorText
+ ,'"' || oreplace(oreplace(substring(qlog.QueryText from 1 for 8000),  chr(10), ' '),'"',' ') || '"' AS QueryText
+ ,qlog.Username
+ ,qlog.UtilityRowCount
+ ,qlog.CacheFlag
+, qlog.QueryBand
+, qlog.WDID
+, qlog.FinalWDID
+, qlog.TDWMEstTotalTime
+, qlog.RequestNum
+, qlog.InternalRequestNum
+, qlog.DelayTime
+, qlog.ReqIOKB
+, qlog.ReqPhysIO
+, qlog.ReqPhysIOKB
+, qlog.Path_Year
+, qlog.Path_Month
+, qlog.Path_Day
+FROM
+ ${TdBenchDb}.DBQLogV qlog
+;
+
+eof
+
+sql ${TdBenchServer} COMMENT ON VIEW ${TdBenchDb}.RptTestCluster AS 'Aggregates cluster detail for  queries running in context of a RunId. Use with constraints RunId=? or RunId IN ( ) and path_year, path_month, path_day.';
+
+sql ${TdBenchServer} delim=eof
+REPLACE VIEW  ${TdBenchDb}.RptTestSteps AS
+SELECT 
+	qlsteps.RunId
+        ,qlsteps.ClientRunId
+	,qlsteps.TestName
+	,qlog.QueryName
+	,qlog.QueryStepName
+	,qlsteps.ParentQueryId
+	,qlsteps.StepLev1Num + .1 * qlsteps.StepLev2Num (Decimal(4,1)) AS sNum
+	,qlsteps.StepName
+	,qlsteps.StepStartTime
+	,${TdBenchDb}.TimestampSubtract(qlsteps.StepStartTime, qlog.StartTime) AS sStart
+	,${TdBenchDb}.TimestampSubtract(qlsteps.StepStopTime, qlsteps.StepStartTime) AS sElapse
+  ,case when pctRun > .2 then 'Hi_CPU ' else '' end ||
+   case when RowVsEst < .3 or RowVsEst > 3 then 'Bad_Est ' else '' end ||
+   case when IOperCpuSec < 500 then 'Low_IO ' else '' end ||
+   case when IOperCpuSec > 3000 then 'Hi_IO ' else '' end ||
+   case when sElapse > 10 and CpuSkew > .3 then 'Skew ' else '' end (varchar(30)) as Issue
+	,sElapse/NULLIFZERO(qlog.RunSecs) AS pctRun
+	,qlsteps.EstProcTime
+	,qlsteps.CPUTime
+	,qlsteps.IOcount
+	,qlsteps.IOcount / NullIfZero(qlsteps.CpuTime) as IOperCpuSec
+	,qlsteps.RowCount
+	,qlsteps.RowCount/NULLIFZERO(qlsteps.EstRowCount) AS RowVsEst
+	,qlsteps.RowsWComprColumns/NULLIFZERO(qlsteps.RowCount) AS CompPct
+	,1 - qlsteps.CpuTime/NULLIFZERO(qlsteps.NumOfActiveAmps * qlsteps.MaxAmpCpuTime)  AS CpuSkew
+	,1 - qlsteps.SpoolUsage/NULLIFZERO(qlsteps.NumOfActiveAmps * qlsteps.MaxAmpSpool) AS SpoolSkew
+	,qlsteps.MaxCPUAmpNumber
+	,qlsteps.MaxSpoolAmpNumber
+	,cast(qlog.Path_Year as char(4)) Path_Year
+	,cast(qlog.Path_Month as char(2)) Path_Month
+	,cast(qlog.Path_Day as char(2)) Path_day
+FROM 
+	${TdBenchDb}.RptTestDetail qlog join ${TdBenchDb}.DBQLStepV qlsteps
+	on qlog.ParentQueryId = qlsteps.ParentQueryId and qlog.Path_Year = qlsteps.Path_Year and qlog.Path_Month = qlsteps.Path_Month and qlog.Path_Day = qlsteps.Path_Day
+
+;
+
+eof
+
+sql ${TdBenchServer} COMMENT ON VIEW ${TdBenchDb}.RptTestSteps AS 'Reports detailed steps for queries in a given RunId or queryname across RunIds.';
+
+sql ${TdBenchServer} delim=eof
+REPLACE VIEW  ${TdBenchDb}.RptTestObjects AS
+SELECT 
+	qlobjects.*  
+FROM 
+   ${TdBenchDb}.DBQLObjV qlobjects
+;
+
+eof
+
+sql ${TdBenchServer} COMMENT ON VIEW ${TdBenchDb}.RptTestObjects AS 'Reports referenced objects for queries in a given RunId and/or queryname across RunIds.';
+
+sql ${TdBenchServer} delim=eof
+REPLACE VIEW  ${TdBenchDb}.RptTestExplain AS
+SELECT
+	qlexp.*
+FROM 
+	${TdBenchDb}.DBQLExplainV qlexp
+;
+
+eof
+
+sql ${TdBenchServer} COMMENT ON VIEW ${TdBenchDb}.RptTestExplain AS 'Reports the EXPLAIN text for queries in a given RunId and/or queryname across RunIds.';
+
+sql ${TdBenchServer} delim=eof
+REPLACE VIEW  ${TdBenchDb}.RptTestSQL AS
+SELECT 
+	qlsql.*     
+FROM 
+	${TdBenchDb}.DBQLSqlV qlsql
+;
+
+eof
+
+sql ${TdBenchServer} COMMENT ON VIEW ${TdBenchDb}.RptTestSQL AS 'Extracts the complete SQL for a given RunId or query across RunIds.';
+
+sql ${TdBenchServer} delim=eof
+replace view ${TdBenchDb}.RptSumRuns as
+select  runid
+,ClientRunId
+,min(starttime)  (format 'YYYY-MM-DDBHH:MI:SS') as StartTime
+,testname (varchar(20))
+,case when username like '${TdBenchPrefix}%' then 'BenchUser' else 'OtherUser' end UserType
+,${TdBenchDb}.timestampsubtract(max(starttime), min(starttime)) (format 'ZZZ,ZZZ') TestSecs
+, count(distinct queryname) (format 'ZZZ,ZZZ') NumScripts 
+, count(*) (format 'ZZZ,ZZZ') NumQueries
+,sum(case when errorcode = 0 or errorcode = 3158 then 1 else 0 end) (format 'ZZZ,ZZZ') NumNoErrors
+,sum(RunSecs) (format 'ZZZ,ZZZ') SumRunSecs
+,average(RunSecs) (format 'ZZZ,ZZZ') AveRunSecs
+,sum(AmpCpuTime) (format 'ZZZ,ZZZ') SumAmpCpu
+,sum(ParserCpuTime) (format 'ZZZ,ZZZ') SumParserCpu
+,sum(TotalIoCount) (format 'ZZZ,ZZZ,ZZZ,ZZZ')SumIOCount
+,Sum(SpoolUsage) (format 'ZZZ,ZZZ,ZZZ,ZZZ,ZZZ') SumSpool
+,PATH_YEAR
+,PATH_MONTH
+,PATH_DAY 
+,'PATH_YEAR=''' || PATH_YEAR || ''' and PATH_MONTH=''' || PATH_MONTH || ''' and PATH_DAY=''' || PATH_DAY || '''' Path_Constraint
+from ${TdBenchDb}.RptTestDetail 
+group by 1, 2, testname, usertype, PATH_YEAR, PATH_MONTH, PATH_DAY, Path_Constraint;
+
+eof
+echo 40% complete
+sql ${TdBenchServer} comment on view ${TdBenchDb}.RptSumRuns as 'Summarizes query execution statistics by benchmark users vs others across RunIds.'; 
+
+sql ${TdBenchServer} delim=eof
+REPLACE VIEW  ${TdBenchDb}.RptSumErrors AS
+SELECT
+	ql.RunId
+        ,ql.ClientRunId
+	,ql.TestName
+	,ql.ERRORCODE
+	,case when username like '${TdBenchPrefix}%' then 'BenchUser' else 'OtherUser' end UserType
+	,CAST (CASE WHEN QueryName IS NULL THEN 'Other'
+		ELSE 'Benchmark' END AS VARCHAR(10)) AS StmtGroup  
+	,COUNT(*) AS ExecCnt
+	,SUM( ql.RunSecs ) AS TotRunSecs
+	,TotRunSecs/ExecCnt AS AveResp
+	,SUM(CpuTime) AS CpuTime
+	,ql.ErrorText
+	,PATH_YEAR
+	,PATH_MONTH
+	,PATH_DAY
+
+FROM 
+   ${TdBenchDb}.RptTestDetail ql
+GROUP BY 
+	1, 2, 3, 4, 5, 6, ql.errortext, PATH_YEAR, PATH_MONTH, PATH_DAY
+;
+
+eof
+
+sql ${TdBenchServer} COMMENT ON VIEW ${TdBenchDb}.RptSumErrors AS 'Provides summary by run of executions and errors. You may want to constrain on RunId.';
+
+sql ${TdBenchServer} delim=eof
+REPLACE VIEW  ${TdBenchDb}.RptSumQueries AS 
+SELECT 
+	ql.RunId
+        ,ql.ClientRunId
+	,ql.QueryName
+	,ql.QueryStepName
+	,ql.ERRORCODE
+	,COUNT(*) AS ExecCnt
+	,SUM(ql.RunSecs) AS SumRunSecs
+	,AVERAGE(ql.RunSecs) AS AveRunSecs
+	,MAX(ql.RunSecs) AS MaxRunSecs 
+	,SUM(ql.CPUTime) AS SumCpuTime
+	,100. * SUM(ql.CPUTime)/x.RunCpu AS CpuPctOfRun
+        ,PATH_YEAR
+        ,PATH_MONTH
+        ,PATH_DAY
+FROM 
+	${TdBenchDb}.RptTestDetail ql
+	,(SELECT RunId AS SumRunId, SUM(CPUTime) AS RunCpu FROM ${TdBenchDb}.RptTestDetail GROUP BY 1) x
+WHERE 
+	ql.RunId = x.SumRunId
+GROUP BY 
+	1, 2, 3, 4, 5, x.RunCpu,  PATH_YEAR, PATH_MONTH, PATH_DAY
+;
+
+eof
+
+sql ${TdBenchServer} COMMENT ON VIEW ${TdBenchDb}.RptSumQueries AS 'Summarizes query executions for a test. Use with constraints RunId=? or RunId IN ( ).';
+
+sql ${TdBenchServer} delim=eof
+Replace macro ${TdBenchDb}.RptCompareSerialQueriesRank(RunId1 integer, RunId2 integer, MinRunSecs float default 0, RankRunSecs integer 
+default null, RankCpu integer default null, RankParse integer default null, RankIO integer default null) as (
+select
+r1.QueryName (format 'X(12)', varchar(50)) QueryName
+,r1.QueryStepName (format 'X(6)', varchar(10)) QueryStepName
+,r1.runid (format 'ZZ9') RunID#1 
+,r2.runid  (format 'ZZ9') RunID#2
+,rank() over(order by r2.runsecs/nullifzero(r1.runsecs) desc) (format 'ZZ,ZZ9') RankRunSecs
+,rank() over(order by r2.AmpCpuTime/nullifzero(r1.AmpCpuTime) desc)  (format 'ZZ,ZZ9') RankCpu
+,rank() over(order by r2.ParserCpuTime/nullifzero(r1.ParserCpuTime) desc)  (format 'ZZ,ZZ9') RankParse
+,rank() over(order by r2.TotalIoCount/nullifzero(r1.TotalIoCount) desc)  (format 'ZZ,ZZ9') RankIO
+,r1.RunSecs   (format 'ZZ,ZZ9') as RunSecs1
+,r2.RunSecs  (format 'ZZ,ZZ9') as RunSecs2
+,r1.DelayTime  (format 'ZZ,ZZ9') DlySecs1
+,r2.DelayTime  (format 'ZZ,ZZ9') DlySecs2
+,r1.AmpCpuTime (format 'ZZZ,ZZ9') AmpCpu1
+,r2.AmpCpuTime  (format 'ZZZ,ZZ9') AmpCpu2
+,r1.ParserCpuTime (format 'ZZZ,ZZ9') ParseCpu1
+,r2.ParserCpuTime (format 'ZZZ,ZZ9') ParseCpu2
+-- ,r1.CpuSkew (format 'ZZ9.99') as CpuSkew1
+-- ,r2.CpuSkew (format 'ZZ9.99') as CpuSkew2
+,r1.TotalIoCount (format 'ZZZ,ZZZ,ZZ9') as TotalIoCount1
+,r2.TotalIoCount (format 'ZZZ,ZZZ,ZZ9') as TotalIoCount2
+,r1.ReqPhysIOKB (format 'ZZZ,ZZZ,ZZ9') as ReqPhysIOKB1
+,r2.ReqPhysIOKB (format 'ZZZ,ZZZ,ZZ9') as ReqPhysIOKB2
+,r1.CacheFlag as CacheFlag1
+,r2.CacheFlag as CacheFlag2
+,r1.NumSteps (format 'ZZ9') as NumSteps1
+,r2.NumSteps (format 'ZZ9') as NumSteps2
+,r1.NumStepswPar (format 'ZZ9') as NumStepswPar1
+,r2.NumStepswPar (format 'ZZ9') as NumStepswPar2
+,r1.MaxStepsInPar (format 'ZZ9') as MaxStepsInPar1
+,r2.MaxStepsInPar (format 'ZZ9') as MaxStepsInPar2
+from
+(
+ select Runid
+  ,case 
+     when querytext like '%exec%benchmark.%' or querytext like '%call%benchmark.%' or querytext like '%/*%tdb=%*/%' then ${TdBenchDb}.ExtractBenchQname(querytext)
+	 when queryband like '%tdb=%' then ${TdBenchDb}.ExtractBenchQname(queryband)
+	 else '' end as QueryName
+ ,case 
+     when querytext like '%/*%tdb=%.%*/%' then ${TdBenchDb}.ExtractBenchQname(querytext)
+	 when queryband like '%tdb=%.%' then ${TdBenchDb}.ExtractBenchQname(queryband)
+	 else '' end as QueryStepName	 
+ ,${TdBenchDb}.TimestampSubtract(ql.FirstRespTime, ql.StartTime) AS RunSecs
+ ,DelayTime
+ ,NumResultRows
+ ,AmpCpuTime
+ ,ParserCpuTime
+-- ,1 - AmpCpuTime/NULLIFZERO(NumOfActiveAmps * MaxAmpCpuTime) AS CpuSkew
+ ,TotalIoCount
+ ,ReqPhysIOKB
+ ,CacheFlag
+ ,NumSteps
+ ,NumStepswPar
+ ,MaxStepsInPar
+ from ${TdBenchDb}.DBQLogV ql
+ where username like '${TdBenchPrefix}%' 
+ and queryname <> ''
+ and Runid = :RunId1) r1
+join
+(
+ Select RunId
+ ,case 
+     when querytext like '%exec%benchmark.%' or querytext like '%call%benchmark.%' or querytext like '%/*%tdb=%*/%' then ${TdBenchDb}.ExtractBenchQname(querytext)
+	 when queryband like '%tdb=%' then ${TdBenchDb}.ExtractBenchQname(queryband)
+	 else '' end as QueryName
+ ,case 
+     when querytext like '%/*%tdb=%.%*/%' then ${TdBenchDb}.ExtractBenchQname(querytext)
+	 when queryband like '%tdb=%.%' then ${TdBenchDb}.ExtractBenchQname(queryband)
+	 else '' end as QueryStepName	  ,${TdBenchDb}.TimestampSubtract(ql.FirstRespTime, ql.StartTime) AS RunSecs
+ ,DelayTime
+ ,NumResultRows
+ ,AmpCpuTime
+ ,ParserCpuTime
+-- ,1 - AmpCpuTime/NULLIFZERO(NumOfActiveAmps * MaxAmpCpuTime) AS CpuSkew
+ ,TotalIoCount
+ ,ReqPhysIOKB
+ ,CacheFlag
+ ,NumSteps
+ ,NumStepswPar
+ ,MaxStepsInPar
+ from ${TdBenchDb}.DBQLogV ql
+ where username like '${TdBenchPrefix}%' 
+ and queryname <> ''
+ and runsecs > :MinRunSecs  -- only latest run is constrained, then inner joined to 1st
+ and Runid = :RunId2) r2
+on r1.queryname = r2.queryname
+and r1.querystepname = r2.querystepname
+qualify 
+  (:RankRunSecs is null or RankRunSecs <= :RankRunSecs) and
+  (:RankCpu is null or RankCpu <= :RankCpu) and
+  (:RankParse is null or RankParse <= :RankParse) and
+  (:RankIO is null or RankIO <= :RankIO)
+
+order by RankRunSecs,RankCpu, RankParse,RankIO
+;);
+eof
+
+sql ${TdBenchServer} comment on column ${TdBenchDb}.RptCompareSerialQueriesRank.Runid1 as 'The earliest RunID for analysis';
+sql ${TdBenchServer} comment on column ${TdBenchDb}.RptCompareSerialQueriesRank.Runid2 as 'The latest RunID for analysis';
+sql ${TdBenchServer} comment on column ${TdBenchDb}.RptCompareSerialQueriesRank.MinRunSecs as 'Only look at queries faster than this in RunID2';
+sql ${TdBenchServer} comment on column ${TdBenchDb}.RptCompareSerialQueriesRank.Rankrunsecs as 'show top N based on rank of Run Secs ratio';
+sql ${TdBenchServer} comment on column ${TdBenchDb}.RptCompareSerialQueriesRank.Rankcpu as 'show top N based on rank of Cpu Secs ratio';
+sql ${TdBenchServer} comment on column ${TdBenchDb}.RptCompareSerialQueriesRank.Rankparse as 'show top N based on rank of Parse Secs ratio';
+sql ${TdBenchServer} comment on column ${TdBenchDb}.RptCompareSerialQueriesRank.Rankio as 'show top N based on rank of IO Count Ratio';
+sql ${TdBenchServer} comment on macro ${TdBenchDb}.RptCompareSerialQueriesRank as 'Compares queries from 2 SERIAL runids where RunSecs of RunID2 > MinRunSecs, selecting top "n" based on ratio of either RunSecs, Cpu, Parse, or IO';
+echo 60% complete
+sql ${TdBenchServer} delim=eof
+Replace macro ${TdBenchDb}.RptCompareWorkloadRank(RunId1 integer, RunId2 integer, MinRunSecs float default 0, RankRunSecs integer default 
+
+null, RankCpu integer default null, RankParse integer default null, RankIO integer default null) as (
+select
+r1.QueryName (format 'X(50)', varchar(50)) QueryName
+,r1.QueryStepName (format 'X(10)', varchar(10)) QueryStepName
+,r1.runid (format 'ZZ9') RunID#1 
+,r2.runid  (format 'ZZ9') RunID#2
+,rank() over(order by (r2.runsecs/r2.ExecCnt)/(nullifzero(r1.runsecs)/nullifzero(r1.ExecCnt)) desc) (format 'ZZ,ZZ9') RankRunSecs
+,rank() over(order by (r2.AmpCpuTime/r2.ExecCnt)/(nullifzero(r1.AmpCpuTime)/nullifzero(r1.ExecCnt)) desc)  (format 'ZZ,ZZ9') RankCpu
+,rank() over(order by (r2.ParserCpuTime/r2.ExecCnt)/(nullifzero(r1.ParserCpuTime)/nullifzero(r1.ExecCnt)) desc)  (format 'ZZ,ZZ9') RankParse
+,rank() over(order by (r2.TotalIoCount/r2.ExecCnt)/(nullifzero(r1.TotalIoCount)/nullifzero(r1.ExecCnt)) desc)  (format 'ZZ,ZZ9') RankIO
+,r1.ExecCnt (format 'ZZ,ZZ9') as ExecCnt1
+,r2.ExecCnt (format 'ZZ,ZZ9') as ExecCnt2
+,r1.RunSecs/r1.ExecCnt   (format 'ZZ,ZZ9')  as AveRunSec1
+,r2.RunSecs/r2.ExecCnt (format 'ZZ,ZZ9')  as AveRunSec2
+,r1.MaxRunSecs   (format 'ZZ,ZZ9')  as MaxSecs1
+,r2.MaxRunSecs (format 'ZZ,ZZ9')  as MaxSecs2
+,r1.DelayTime/r1.ExecCnt  (format 'ZZ,ZZ9') AveDlySecs1
+,r2.DelayTime/r2.ExecCnt  (format 'ZZ,ZZ9') AveDlySecs2
+,r1.MaxDelayTime  (format 'ZZ,ZZ9') as MaxDelayTime1
+,r2.MaxDelayTime  (format 'ZZ,ZZ9') as MaxDelayTime2
+,r1.AmpCpuTime/r1.ExecCnt (format 'ZZZ,ZZ9') AveAmpCpu1
+,r2.AmpCpuTime/r2.ExecCnt  (format 'ZZZ,ZZ9') AveAmpCpu2
+,r1.ParserCpuTime/r1.ExecCnt (format 'ZZZ,ZZ9') AveParseCpu1
+,r2.ParserCpuTime/r2.ExecCnt (format 'ZZZ,ZZ9') AveParseCpu2
+-- ,r1.CpuSkew/r1.ExecCnt (format 'ZZ9.99') as AveCpuSkew1
+-- ,r2.CpuSkew/r2.ExecCnt (format 'ZZ9.99') as AveCpuSkew2
+,r1.TotalIoCount/r1.ExecCnt (format 'ZZZ,ZZZ,ZZ9') as AveIoCount1
+,r2.TotalIoCount/r2.ExecCnt (format 'ZZZ,ZZZ,ZZ9') as AveIoCount2
+,r1.ReqPhysIOKB/r1.ExecCnt (format 'ZZZ,ZZZ,ZZ9') as AveReqPhysIOKB1
+,r2.ReqPhysIOKB/r2.ExecCnt (format 'ZZZ,ZZZ,ZZ9') as AveReqPhysIOKB2
+,r1.MaxReqPhysIOKB (format 'ZZZ,ZZZ,ZZ9') as MaxReqPhysIOKB1
+,r2.MaxReqPhysIOKB (format 'ZZZ,ZZZ,ZZ9') as MaxReqPhysIOKB2
+,r1.CacheCnt as CacheCnt1
+,r2.CacheCnt as CacheCnt2
+from
+(
+ select Runid
+ ,case 
+     when querytext like '%exec%benchmark.%' or querytext like '%call%benchmark.%' or querytext like '%/*%tdb=%*/%' then ${TdBenchDb}.ExtractBenchQname(querytext)
+	 when queryband like '%tdb=%' then ${TdBenchDb}.ExtractBenchQname(queryband)
+	 else '' end as QueryName
+ ,case 
+     when querytext like '%/*%tdb=%.%*/%' then ${TdBenchDb}.ExtractBenchQname(querytext)
+	 when queryband like '%tdb=%.%' then ${TdBenchDb}.ExtractBenchQname(queryband)
+	 else '' end as QueryStepName	  ,count(*) as ExecCnt
+ ,sum(${TdBenchDb}.TimestampSubtract(ql.FirstRespTime, ql.StartTime)) AS RunSecs
+ ,max(${TdBenchDb}.TimestampSubtract(ql.FirstRespTime, ql.StartTime)) AS MaxRunSecs
+ ,sum(DelayTime) as DelayTime
+ ,max(DelayTime) as MaxDelayTime
+ ,sum(NumResultRows) as NumResultRows
+ ,sum(AmpCpuTime) as AmpCpuTime
+ ,sum(ParserCpuTime) as ParserCpuTime
+ -- ,sum(1 - AmpCpuTime/NULLIFZERO(NumOfActiveAmps * MaxAmpCpuTime)) AS CpuSkew
+ ,sum(TotalIoCount) as TotalIoCount
+ ,sum(ReqPhysIOKB) as ReqPhysIOKB
+ ,max(ReqPhysIOKB) as MaxReqPhysIOKB
+ ,sum(case when cacheflag <> ' ' then 1 else 0 end) CacheCnt
+ from ${TdBenchDb}.DBQLogV ql
+ where username like '${TdBenchPrefix}%' 
+ and queryname <> ''
+ and Runid = :RunId1
+ group by 1,2,3) r1
+join
+(
+ Select RunId
+ ,case 
+     when querytext like '%exec%benchmark.%' or querytext like '%call%benchmark.%' or querytext like '%/*%tdb=%*/%' then ${TdBenchDb}.ExtractBenchQname(querytext)
+	 when queryband like '%tdb=%' then ${TdBenchDb}.ExtractBenchQname(queryband)
+	 else '' end as QueryName
+ ,case 
+     when querytext like '%/*%tdb=%.%*/%' then ${TdBenchDb}.ExtractBenchQname(querytext)
+	 when queryband like '%tdb=%.%' then ${TdBenchDb}.ExtractBenchQname(queryband)
+	 else '' end as QueryStepName	  ,count(*) as ExecCnt
+ ,sum(${TdBenchDb}.TimestampSubtract(ql.FirstRespTime, ql.StartTime)) AS RunSecs
+ ,max(${TdBenchDb}.TimestampSubtract(ql.FirstRespTime, ql.StartTime)) AS MaxRunSecs
+ ,sum(DelayTime) as DelayTime
+ ,max(DelayTime) as MaxDelayTime
+ ,sum(NumResultRows) as NumResultRows
+ ,sum(AmpCpuTime) as AmpCpuTime
+ ,sum(ParserCpuTime) as ParserCpuTime
+-- ,sum(1 - AmpCpuTime/NULLIFZERO(NumOfActiveAmps * MaxAmpCpuTime)) AS CpuSkew
+ ,sum(TotalIoCount) as TotalIoCount
+ ,sum(ReqPhysIOKB) as ReqPhysIOKB
+ ,max(ReqPhysIOKB) as MaxReqPhysIOKB
+ ,sum(case when cacheflag <> ' ' then 1 else 0 end) CacheCnt
+ from ${TdBenchDb}.DBQLogV ql
+ where username like '${TdBenchPrefix}%' 
+ and queryname <> ''
+ and Runid = :RunId2
+ having RunSecs/ExecCnt > :MinRunSecs  -- only latest run is constrained, then inner joined to 1st
+ group by 1,2,3) r2
+on r1.queryname = r2.queryname
+and r1.querystepname = r2.querystepname
+qualify 
+  (:RankRunSecs is null or RankRunSecs <= :RankRunSecs) and
+  (:RankCpu is null or RankCpu <= :RankCpu) and
+  (:RankParse is null or RankParse <= :RankParse) and
+  (:RankIO is null or RankIO <= :RankIO)
+
+order by RankRunSecs,RankCpu, RankParse,RankIO
+;);
+eof
+
+sql ${TdBenchServer} comment on column ${TdBenchDb}.RptCompareWorkloadRank.Runid1 as 'The earliest RunID for analysis';
+sql ${TdBenchServer} comment on column ${TdBenchDb}.RptCompareWorkloadRank.Runid2 as 'The latest RunID for analysis';
+sql ${TdBenchServer} comment on column ${TdBenchDb}.RptCompareWorkloadRank.MinRunSecs as 'Only look at queries faster than this in RunID2';
+sql ${TdBenchServer} comment on column ${TdBenchDb}.RptCompareWorkloadRank.Rankrunsecs as 'show top N based on rank of Run Secs ratio';
+sql ${TdBenchServer} comment on column ${TdBenchDb}.RptCompareWorkloadRank.Rankcpu as 'show top N based on rank of Cpu Secs ratio';
+sql ${TdBenchServer} comment on column ${TdBenchDb}.RptCompareWorkloadRank.Rankparse as 'show top N based on rank of Parse Secs ratio';
+sql ${TdBenchServer} comment on column ${TdBenchDb}.RptCompareWorkloadRank.Rankio as 'show top N based on rank of IO Count Ratio';
+sql ${TdBenchServer} comment on macro ${TdBenchDb}.RptCompareWorkloadRank as 'Compares queries from 2 WORKLOAD runids where AveRunSecs of RunID2 > MinRunSecs, selecting top "n" based on ratio of either averages of RunSecs, Cpu, Parse, or IO';
+
+sql ${TdBenchServer} delim=eof
+replace macro ${TdBenchDb}.RptListAllRunid as
+(select * from ${TdBenchDb}.TestTracking order by Runid
+;);
+eof
+echo 80% complete
+sql ${TdBenchServer} comment on macro ${TdBenchDb}.RptListAllRunid as 'List out all information on all RunIds, ordered by RunID';
+
+sql ${TdBenchServer} delim=eof
+replace macro ${TdBenchDb}.RptWorkloadInFlight(RunID integer, freq integer default 30) as (
+with clock as (
+select rank() over(order by calendar_date) as tick from sys_calendar.calendar, ${TdBenchDb}.testtracking
+where runid = :RunID
+qualify tick <= least(9999/:freq, (${TdBenchDb}.timestampsubtract(actualstoptime, starttime) / :freq)) (integer)
+)
+-- earlier releases may not have wdname in dbqlogtbl. If this errors out, put a -- in front of it
+select tt.runid, tt.testname, tick, tt.starttime + interval '1' second * :freq * tick TicTime, ql.wdname, 
+sum( case when tt.starttime + interval '1' second * :freq * tick between ql.starttime and ql.starttime  + cast(zeroifnull(ql.delaytime) as decimal(7,2)) * interval '1' second then 1 else 0 end) waiting,
+sum( case when tt.starttime + interval '1' second * :freq *tick between ql.starttime + cast(zeroifnull(ql.delaytime) as decimal(7,2)) * interval '1' second and firststeptime then 1 else 0 end) parsing,
+sum( case when tt.starttime + interval '1' second * :freq *tick between ql.firststeptime  and firstresptime then 1 else 0 end) running
+        ,PATH_YEAR
+        ,PATH_MONTH
+        ,PATH_DAY
+from TD_METRIC_SVC.DBQLogV ql, ${TdBenchDb}.testtracking tt, clock
+where tt.runid = :RunID and (ql.starttime between tt.starttime and tt.actualstoptime or ql.firstresptime between tt.starttime and tt.actualstoptime
+or tt.starttime between ql.starttime and ql.firstresptime)
+group by 1,2,3,4,5, PATH_YEAR, PATH_MONTH, PATH_DAY  order by 1,2,3,4
+;);
+eof
+
+sql ${TdBenchServer} comment on macro ${TdBenchDb}.RptWorkloadInFlight as 'Analyze workloads in flight each n seconds for given RunID and optional frequency (default n=30 sec)';
+
+sql ${TdBenchServer} delim=eof
+replace macro ${TdBenchDb}.RptQueryInFlight(RunID integer, freq integer default 30) as (
+with clock as (
+select rank() over(order by calendar_date) as Tick from sys_calendar.calendar, ${TdBenchDb}.testtracking
+where runid = :RunID
+qualify tick <= least((${TdBenchDb}.timestampsubtract(actualstoptime, starttime) / :freq), 9999/:freq) (integer)
+)
+-- earlier releases may not have wdname in dbqlogtbl. If this errors out, put a -- in front of it
+select tt.runid, tt.testname, tick, tt.starttime + interval '1' second * :freq * tick TickTime,
+case
+when querytext LIKE '%exec%benchmark.%' or querytext LIKE '%call%benchmark.%' or querytext LIKE '%/*%tdb=%*/%' then ${TdBenchDb}.ExtractBenchQname(querytext)
+when queryband LIKE '%tdb=%' then ${TdBenchDb}.ExtractBenchQname(queryband)
+else '' end as QueryName,
+sum( case when tt.starttime + interval '1' second * :freq * tick between ql.starttime and ql.starttime  + cast(zeroifnull(ql.delaytime) as decimal(7,2)) * interval '1' second then 1 else 0 end) waiting,
+sum( case when tt.starttime + interval '1' second * :freq *tick between ql.starttime + cast(zeroifnull(ql.delaytime) as decimal(7,2)) * interval '1' second and firststeptime then 1 else 0 end) parsing,
+sum( case when tt.starttime + interval '1' second * :freq *tick between ql.firststeptime  and firstresptime then 1 else 0 end) running
+        ,PATH_YEAR
+        ,PATH_MONTH
+        ,PATH_DAY
+from TD_METRIC_SVC.DBQLogV ql, ${TdBenchDb}.testtracking tt, clock
+where tt.runid = :RunID and (ql.starttime between tt.starttime and tt.actualstoptime or ql.firstresptime between tt.starttime and tt.actualstoptime
+or tt.starttime between ql.starttime and ql.firstresptime)
+group by 1,2,3,4,5,  PATH_YEAR, PATH_MONTH, PATH_DAY  order by 1,2,3,4
+;);
+eof
+
+sql ${TdBenchServer} comment on macro ${TdBenchDb}.RptQueryInFlight as 'Analyze queries in flight each n seconds for given RunID and optional frequency (default n=30 sec)';
+
+sql ${TdBenchServer} delim=eof
+replace view ${TdBenchDb}.RptSystemCpu as
+select RunID
+, ClientRunID
+, TestName
+, TheDate
+, TheTime
+, NCPUs
+, cast((RunID (format 'zzz9')) as varchar(4)) || '-' || cast((TheTime(format '99:99:99')) as varchar(8))  RunIdTime 
+, sum(CpuUExec) CpuUExec
+, sum(CpuUServ) CpuUServ
+, sum(CpuIOWait) CpuIOWait
+, sum(CpuIdle) CpuIdle
+-- , sum( FlowCtlCnt) FlowCtlCnt        -- some dbc versions have AmpFlowCtlCnt
+        ,PATH_YEAR
+        ,PATH_MONTH
+        ,PATH_DAY
+from ${TdBenchDb}.ResusageSpmaV
+group by 1,2,3,4,5,6,  PATH_YEAR, PATH_MONTH, PATH_DAY ;
+
+eof
+
+sql ${TdBenchServer} Comment on ${TdBenchDb}.RptSystemCpu as 'Summarizes CPU, IO wait, and idle for each resuage logging event within RunID';
+
+sql ${TdBenchServer} delim=eof
+Replace macro ${TdBenchDb}.TestCondition(RunId integer default null, RunCondition varchar(4000) default null) as (
+-- When RunId is null, then use most recent, else specified RunID
+-- RunCondition can either be the replacement text, a minus character to delete it, or null to list it
+locking ${TdBenchDb}.TestTracking for write bt
+; update ${TdBenchDb}.testtracking from  (select max(runid) as LastRunID from ${TdBenchDb}.testtracking) tt
+     set RunCondition = case when :RunCondition = '-' then ''
+     when :RunCondition = '?' or :RunCondition = '' or :RunCondition is null then RunCondition
+            else case when (RunCondition is null or RunCondition = '') 
+                  then :RunCondition 
+                  else RunCondition|| ' | ' || :RunCondition 
+             end 
+       end
+where (:RunId is not null and :RunId <> 0 and runid = :RunID) or (:RunId is null and runid = tt.LastRunID)\;
+select 'Run #' || runid || ' starting ' || cast(  (ReleaseExecTime (format 'MM/DDBHH:MI:SS')) as varchar(14)) 
+|| ' Conditions: '  || coalesce(RunCondition,'')  (Title 'New/Current Run Condition') from ${TdBenchDb}.testtracking 
+where ((:Runid is null or :RunId=0) and runid in  (select max(runid) from ${TdBenchDb}.testtracking)) or RunID = :RunID
+;  et
+; );
+eof
+
+sql ${TdBenchServer} Comment on macro ${TdBenchDb}.TestCondition as 'Macro to update/view the condition comments in TestTracking';
+
+sql ${TdBenchServer} delim=eof
+Replace view ${TdBenchDb}.RptUsage as
+select cast(ql.starttime as date) SessionDate, ql.username, ql.appid, 
+count(distinct ql.sessionid) SessionCount, 
+count(*) QueryCount,
+sum(case when ql.errorcode <> 0 then 1 else 0 end) ErrorCount,
+sum(${TdBenchDb}.timestampsubtract(
+cast(cast((logdate (format 'YYYY-MM-DD')) as char(10)) || ' ' || cast((logtime (format '99:99:99')) as char(8)) as timestamp(0)), 
+cast(cast((logondate (format 'YYYY-MM-DD')) as char(10)) || ' ' || cast((logontime (format '99:99:99')) as char(8)) as timestamp(0))
+))/60. SessionMinutes
+from TD_METRIC_SVC.DBQLogV ql join dbc.logonoff logs on ql.username = logs.username and ql.sessionid = logs.sessionno and logs.event = 'Logoff'
+join dbc.children on parent = 'all_user_group' and child = ql.username
+group by 1,2,3;
+eof
+sql ${TdBenchServer} Comment on view ${TdBenchDb}.RptUsage as 'View summarizing usage by user/appid for a SessionDate constraint.';
+
+sql ${TdBenchServer} delim=eof
+replace view ${TdBenchDb}.RptLogonErrors as 
+select logdate SessionDate, logtime (format '99:99:99') SessionTime, UserName, Event, LogonSource from dbc.logonoff 
+where lower(event) not in ('logon', 'logoff');
+eof
+sql ${TdBenchServer} Comment on view ${TdBenchDb}.RptLogonErrors as 'View summarizing irregular events from LogonOff table for a SessionDate constraint.';
+
+sql ${TdBenchServer} delim=eof
+replace view ${TdBenchDb}.RptAccessErrors as
+select cast(starttime as date) SessionDate, username, errortext, count(*) as Attempts
+from TD_METRIC_SVC.DBQLogV where errorcode = 3523
+group by 1,2,3;
+eof
+sql ${TdBenchServer} Comment on view ${TdBenchDb}.RptAccessErrors as 'View summarizing access violations for a SessionDate constraint.';
+
+sql ${TdBenchServer} delim=eof
+replace macro ${TdBenchDb}.DailyReport (StartDate date default null , StopDate date default null) as (
+select * from ${TdBenchDb}.RptUsage where sessiondate between case when :StartDate is null then date - 1 else :StartDate end and case when :StopDate is null then date - 1 else :StopDate end order by 1,2
+;select * from ${TdBenchDb}.RptLogonErrors where SessionDate between case when :StartDate is null then date - 1 else :StartDate end and case when :StopDate is null then date - 1 else :StopDate end order by 1,2
+;select * from ${TdBenchDb}.RptAccessErrors where SessionDate between case when :StartDate is null then date - 1 else :StartDate end and case when :StopDate is null then date - 1 else :StopDate end order by 1,2
+;);
+eof
+sql ${TdBenchServer} Comment on macro ${TdBenchDb}.DailyReport as 'Run RptUsage, RptLogonErrors and RptAccessErrors between 2 dates, both defaulting to date-1.';
+
+sql ${TdBenchServer} delim=eof
+Replace Macro ${TdBenchDb}.TestList (RunRange integer default Null) as (
+select runid, starttime (format 'MM/DDBHH:MI:SS'), 
+case
+when ActualStopTime is null then 'Incomplete'
+else ((${TdBenchDb}.TimeStampSubtract(ActualStopTime, ReleaseExecTime) (format 'zz,zz9.99')) (varchar(10))) end as RunSecs, 
+substring(TestName from 1 for 20) as TestName, Coalesce(RunCondition, RunNotes, RunTitle) (Title 'Condition or Notes or Title')
+from ${TdBenchDb}.TestTracking 
+where :RunRange is null
+or ( :RunRange > 0 and Runid = :RunRange)
+or (:RunRange < 0 and Runid > (select max(runid) from ${TdBenchDb}.Testtracking) + :RunRange)
+Order by 1
+; );
+eof
+
+sql ${TdBenchServer} Comment on macro ${TdBenchDb}.TestList as 'Macro to list out recent tests from TestTracking';
+
+sql ${TdBenchServer} delim=eof
+Replace macro ${TdBenchDb}.TestNote(RunId integer default null, RunNotes varchar(4000) default null) as (
+-- When RunId is null, then use most recent, else specified RunID
+-- Run Notes can either be the additive text, a minus character to delete it, or null to list it
+locking ${TdBenchDb}.TestTracking for write bt
+; update ${TdBenchDb}.testtracking from  (select max(runid) as LastRunID from ${TdBenchDb}.testtracking) tt
+     set RunNotes= case when :RunNotes = '-' then ''
+     when :RunNotes = '?' or :RunNotes = '' or :RunNotes is null then RunNotes
+            else case when (RunNotes is null or RunNotes = '') 
+                  then :RunNotes 
+                  else RunNotes || ' | ' || :RunNotes 
+             end 
+       end
+where (:RunId is not null and runid = :RunID and runid <> 0) or (:RunId is null and runid = tt.LastRunID)\;
+select 'Run #' || runid || ' starting ' || cast(  (ReleaseExecTime (format 'MM/DDBHH:MI:SS')) as varchar(14)) 
+|| ' RunNotes: '  || coalesce(RunNotes,'') (Title 'New/Current Run Notes') from ${TdBenchDb}.testtracking 
+where ((:Runid is null or :Runid = 0) and runid in  (select max(runid) from ${TdBenchDb}.testtracking)) or RunID = :RunID
+; et
+; );
+eof
+
+sql ${TdBenchServer} Comment on macro ${TdBenchDb}.TestNote as 'Macro to update/view the notes comments in TestTracking';
+
+sql ${TdBenchServer} delim=eof
+Replace macro ${TdBenchDb}.TestReport(RunID Smallint default null) as (
+with onerow as (select '1' onevalue)
+select textline (title '') from (
+select 1 (integer) as TextLineNo, 'TestReport for RunID:' || trim(runid) || '   TestName: ' || Testname  || '   Title:'  ||  RunTitle (varchar(250)) as TextLine
+from ${TdBenchDb}.testtracking 
+where (:Runid is null and runid in  (select max(runid) from ${TdBenchDb}.testtracking)) or RunID = :RunID
+
+union
+select 10, '' from onerow
+union
+select 11, ('StartTime' (char(20))) || ('ReleaseExecTime' (char(20))) || ('ReportingStopTime' (char(20))) || ('ActualStopTime' (char(20))) from ${TdBenchDb}.onerow
+union
+select  12,
+ cast ((Starttime (format 'MM/DDBHH:MI:SS')) as char(20)) ||
+ cast ((ReleaseExecTime (format 'MM/DDBHH:MI:SS')) as char(20)) ||
+ coalesce(cast ((ReportingStopTime (format 'MM/DDBHH:MI:SS')) as char(20)), ('' (char(20)))) ||
+ coalesce(cast ((ActualStopTime (format 'MM/DDBHH:MI:SS')) as char(20)),('' (char(20))))
+from ${TdBenchDb}.testtracking 
+where (:Runid is null and runid in  (select max(runid) from ${TdBenchDb}.testtracking)) or RunID = :RunID  
+
+union
+select 13, '' from ${TdBenchDb}.onerow
+union
+select 14, ('Reporting Length' (char(20))) || ('Actual Length' (char(20))) || ('Session Count' (char(20)))  from ${TdBenchDb}.onerow
+union
+select 15, coalesce((substring(cast((ReportingStopTime - ReleaseExecTime hour to second(6)) as varchar(20)) from 1 for 12) (char(20))), ('Incomplete' (char(20)))) ||
+coalesce((substring(cast((ActualStopTime - ReleaseExecTime hour to second(6)) as varchar(20)) from 1 for 12) (char(20))), ('' (char(20))))  ||
+(cast(SessionCnt as char(20)))
+from ${TdBenchDb}.testtracking 
+where (:Runid is null and runid in  (select max(runid) from ${TdBenchDb}.testtracking)) or RunID = :RunID 
+
+union
+select 21, '' from onerow
+union
+select 22, ('#Queries Exec' (char(20))) || ('#Queries RC<>0' (char(20))) || ('#Queries Lines=0' (char(20)))  
+ || ('Total Query CPU' (char(20)))  || ('# Other Exec' (char(20)))  || ('Others CPU' (char(20)))  || ('Total Cpu %' (char(20))) from ${TdBenchDb}.onerow
+union
+select 23, 
+cast((sum(case when  substring(rd.username from 1 for character_length(UserPrefix)) = UserPrefix  then 1 else 0 end) 
+(integer, format 'ZZ,ZZZ,ZZ9')) as char(20)) ||
+cast((sum(case when substring(rd.username from 1 for character_length(UserPrefix)) = UserPrefix and rd.errorcode <> 0 then 1 else 0 end) 
+(integer, format 'ZZ,ZZZ,ZZ9')) as char(20)) ||
+cast((sum(case when substring(rd.username from 1 for character_length(UserPrefix)) = UserPrefix and rd.errorcode = 0 and rd.NumResultRows=0 then 1 else 0 end) 
+(integer, format 'ZZ,ZZZ,ZZ9')) as char(20)) ||
+cast((sum(case when substring(rd.username from 1 for character_length(UserPrefix)) = UserPrefix  then rd.CpuTime else 0 end) 
+(format 'ZZ,ZZZ,ZZZ.99')) as char(20)) ||
+cast((sum(case when substring(rd.username from 1 for character_length(UserPrefix)) <> UserPrefix  then 1 else 0 end) 
+(integer, format 'ZZ,ZZZ,ZZ9')) as char(20)) ||
+cast((sum(case when substring(rd.username from 1 for character_length(UserPrefix)) <> UserPrefix then rd.CpuTime else 0 end) 
+(format 'ZZ,ZZZ,ZZZ.99')) as char(20)) ||
+case when ${TdBenchDb}.timestampsubtract(tt.ReportingStopTime, tt.ReleaseExecTime) = 0 then ('' (char(20)))
+when spma.nCPUs is null then ('ResUsageSPMA is off' (char(20)))
+else cast((100.0*sum(cputime)/(1.0*${TdBenchDb}.timestampsubtract(tt.ReportingStopTime, tt.ReleaseExecTime) * spma.nCPUs) 
+(format 'ZZZ,ZZ9.99%')) as char(20)) end
+ from ${TdBenchDb}.rpttestdetail rd left join
+ (select * from ${TdBenchDb}.TestTracking where (:Runid is null and runid in  (select max(runid) from ${TdBenchDb}.testtracking)) or RunID = :RunID) tt on 1=1 left join
+ (select infodata UserPrefix from ${TdBenchDb}.TdBenchInfo where infokey='PREFIX') tdbi on 1=1 left join
+ (select top 1 nCPUs from TD_METRIC_SVC.resusagespmaV) spma  on 1=1
+where (:Runid is null and rd.runid in  (select max(runid) from ${TdBenchDb}.testtracking)) or rd.RunID = :RunID
+ group by tt.ReportingStopTime, tt.ReleaseExecTime, spma.nCPUs
+
+union
+select 31, '' from ${TdBenchDb}.onerow
+union
+select 32, ('Nodes up @ Start' (char(20))) || ('Nodes up @ End' (char(20))) || ('AMP Count' (char(20)))  from ${TdBenchDb}.onerow
+union
+select 33, 
+cast((NodesUpAtStart (format 'zzz,zz9')) as char(20)) ||
+coalesce(cast((NodesUpAtEnd (format 'zzz,zz9')) as char(20)), ('' (char(20)))) ||
+cast((Amps (format 'zzz,zz9')) as char(20))
+from ${TdBenchDb}.TestTracking 
+where (:Runid is null and runid in  (select max(runid) from ${TdBenchDb}.testtracking)) or RunID = :RunID
+
+union
+select 35, '' from ${TdBenchDb}.onerow
+union
+select 36, ('Rule Set ID' (char(20))) || ('Tdwm Config Name' (char(30))) || ('Tdwm Chg TS' (char(20)))  from ${TdBenchDb}.onerow
+union
+select 37, 
+cast((RuleSetID (format 'zzz,zz9')) as char(20)) ||
+cast(coalesce(TdWmConfigName,'') as char(30)) ||
+coalesce(cast ((TdwmChangeTimeStamp (format 'MM/DDBHH:MI:SS')) as char(20)),'')
+from ${TdBenchDb}.TestTracking 
+where (:Runid is null and runid in  (select max(runid) from ${TdBenchDb}.testtracking)) or RunID = :RunID
+
+union
+select 41, '' from ${TdBenchDb}.onerow
+union
+select 42, ('Error Code' (char(20))) || ('Error Count' (char(20))) || ('Error Text' (char(20)))  from ${TdBenchDb}.onerow
+union
+select 43, 
+cast((em.ErrorCode (format 'z9999')) as char(20)) ||
+cast((ErrorCount (format 'zz,zz9')) as char(20)) ||
+substring(em.errortext from 1 for 80) 
+from  (
+select errorcode, count(*) as ErrorCount from ${TdBenchDb}.RptTestDetail rtd
+join  (select infodata UserPrefix from ${TdBenchDb}.TdBenchInfo where infokey='PREFIX') tdbi 
+on substring(rtd.username from 1 for character_length(UserPrefix)) = UserPrefix
+where ((:Runid is null and runid in  (select max(runid) from ${TdBenchDb}.testtracking)) or RunID = :RunID)
+and errorcode <> 0 group by 1
+) x  
+join dbc.errormsgs em on x.errorcode = em.errorcode
+
+union
+ select 51, '' from ${TdBenchDb}.onerow
+union
+select 52, 'Run Conditions: ' || coalesce(RunCondition, '???')
+from ${TdBenchDb}.testtracking 
+where (:Runid is null and runid in  (select max(runid) from ${TdBenchDb}.testtracking)) or RunID = :RunID
+union
+select 53, 'Run Notes: ' || coalesce(RunNotes, '???')
+from ${TdBenchDb}.testtracking 
+where (:Runid is null and runid in  (select max(runid) from ${TdBenchDb}.testtracking)) or RunID = :RunID
+
+union
+select 61, '' from ${TdBenchDb}.onerow
+union
+select 62, ('Query Name' (char(30))) || ('Exec Count' (char(20))) || ('Ave Resp' (char(20))) || ('% CpuUsed' (char(20))) 
+|| ('# Exec RC <> 0' (char(20))) || ('# Exec Lines=0' (char(20))) from ${TdBenchDb}.onerow
+union
+select 63,
+ cast(queryname as char(30)) || 
+ cast((ExecCnt (format 'zz,zz9')) as char(20)) ||
+ cast((AveResp (format 'z,zz9.99')) as char(20)) ||
+ cast((CpuUsePct (format 'zz9.99')) as char(20)) ||
+ cast((QueryWithErrors (format 'zz,zz9')) as char(20)) ||
+ cast((QueryZeroLines (format 'zz,zz9')) as char(20))
+from (
+ select coalesce(queryname, 'Not Marked') as QueryName, count(*) as ExecCnt, 
+ average(RunSecs) as AveResp, 100.0 * Sum(CpuTime)/TotalUsedTime as CpuUsePct,
+  sum(case when errorcode <> 0 then 1 else 0 end) as QueryWithErrors,
+  sum(case when NumResultRows = 0 then 1 else 0 end) as QueryZeroLines
+  from ${TdBenchDb}.RptTestDetail  rtd
+  join  (select infodata UserPrefix from ${TdBenchDb}.TdBenchInfo where infokey='PREFIX') tdbi 
+    on substring(rtd.username from 1 for character_length(UserPrefix)) = UserPrefix,
+  (select sum(CpuTime) as TotalUsedTime from ${TdBenchDb}.RptTestDetail
+  where (:Runid is null and runid in  (select max(runid) from ${TdBenchDb}.testtracking)) or RunID = :RunID) as runtotal
+ where (:Runid is null and runid in  (select max(runid) from ${TdBenchDb}.testtracking)) or RunID = :RunID
+ Group by 1) as querytotals
+
+) x order by TextLineNo, TextLine
+; );
+
+eof
+
+sql ${TdBenchServer} Comment on macro ${TdBenchDb}.TestReport as 'Macro to generate a report on a RunID.';
+
+sql ${TdBenchServer} delim=eof
+Replace macro ${TdBenchDb}.TestTitle(RunId integer default null, RunTitle varchar(100) default null) as (
+-- When RunId is null, then use most recent, else specified RunID
+-- RunTitle can either be the replacement text, a minus character to delete it, or null to list it
+update ${TdBenchDb}.testtracking from  (select max(runid) as LastRunID from ${TdBenchDb}.testtracking) tt
+     set RunTitle= case when :RunTitle = '-' then ''
+     when :RunTitle='?' or :RunTitle='' or :RunTitle is null then RunTitle
+            else :RunTitle
+        end
+where (:RunId is not null and runid = :RunID and runid <> 0) or runid = tt.LastRunID\;
+select 'Run #' || runid || ' starting ' || cast(  (ReleaseExecTime (format 'MM/DDBHH:MI:SS')) as varchar(14)) || ' RunTitle: '  || coalesce(RunTitle,'') (Title 'New/Current Run Title') from ${TdBenchDb}.testtracking
+where ((:Runid is null or :Runid = 0) and runid in  (select max(runid) from ${TdBenchDb}.testtracking)) or (:RunId is null and RunID = :RunID)\;   
+);
+eof
+
+sql ${TdBenchServer} Comment on macro ${TdBenchDb}.TestTitle as 'Macro to replace/view the test title in TestTracking';
+
+goto endcreateviews
+label createerror
+echo ERROR - create_view_hierarchy.tdb had an error.  Terminating the execution
+goto endcreateviews
+label nofunctionrights
+echo ERROR - unable to create functions. issue:  Grant create function, drop function on  ${TdBenchDb} with grant option
+label endcreateviews
+after_sql delete
+

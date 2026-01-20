@@ -1,0 +1,22 @@
+# parameters: resusagetbl
+echo View ${TdBenchDb}.:i1 joins ${TdBenchDb}.TestTracking and TD_Metric_SVC.:i1 
+sql text:temp/dbql_temp.sql ${TdBenchServer} delim=eof
+select /* tdb=resusage_nopdcr */ Qtext from (
+select 10 (named Qseq, integer, title ''), 'replace /* tdb=resusage_nopdcr_view */ view ' || '${TdBenchDb}' || '.' || ':i1' || ' as'  (named Qtext, varchar(120), title '') from ${TdBenchDb}.onerow union
+select 20, 'select tt.RunID'  from ${TdBenchDb}.onerow union
+select 21, ',tt.ClientRunID'  from ${TdBenchDb}.onerow union
+select 25, ',tt.BenchSystemName ' from ${TdBenchDb}.onerow  union
+select 30,',tt.testname' from ${TdBenchDb}.onerow  union
+select 10000+dbc.columnid, ', ru.' || dbc.columnname
+    from dbc.ColumnsV dbc
+    where dbc.databasename = 'TD_METRIC_SVC'
+       and dbc.tablename = ':i1'
+ union
+select 20000, 'from TD_METRIC_SVC.' || ':i1' || ' ru  join ' || '${TdBenchDb}' || '.TestTracking tt' from ${TdBenchDb}.onerow union
+select 20005, ' on (((ru.TheDate (FORMAT ''YYYY-MM-DD'')) (VARCHAR(11))) || '' '' || (ru.TheTime (VARCHAR(11)))) (TIMESTAMP(2))' from ${TdBenchDb}.onerow union
+select 20010, ' between tt.ReleaseExecTime  and tt.ActualStopTime; ' from ${TdBenchDb}.onerow
+) x order by Qseq;
+eof
+
+sql ${TdBenchServer} temp/dbql_temp.sql
+sql ${TdBenchServer} comment on ${TdBenchDb}.:i1  as 'TdBench testtracking extensions to TD_METRIC_SVC.:i1 with no PDCR'; 

@@ -1,0 +1,18 @@
+0|exec|copy_templates.tdb|Provides starter set of config files or just setup a DB for logon|setup/teradata_lake/scripts/copy_templates.tdb
+
+1|:edit|tdbench_config.sh|OPTIONAL - Customize execution for you to choose jar file version and default DBMS|tdbench_config.sh
+2|:edit|tdbench_teradata_lake_config.sh|Customize environment variables such as passwords and directories|tdbench_teradata_lake_config.sh
+3|:edit|tdbench.tdb|OPTIONAL - Initial command file executed by jar file to customize session settings|tdbench.tdb
+4|:edit|tdbench_teradata_lake.tdb|Command file to define class and db connections for Teradata servers|tdbench_teradata_lake.tdb
+
+5|exit 123|reset| IF NEEDED - Restart tdbench to reload the settings from above 4 config & .tdb files|
+
+6|exec|test_connect.tdb|Run simple select to validate your logon ID on host DBMS|setup/teradata_lake/scripts/test_connect.tdb
+7|:edit|create_tdbench.sql|Edit the script with create user and grant statements for host DBMS TdBench user|setup/teradata_lake/scripts/create_tdbench.sql
+8|exec|create_tdbench.tdb|Define the user/database on target Teradata DBMS|setup/teradata_lake/scripts/create_tdbench.tdb
+9|exec|valiate_tdbench_host.tdb|Validate setup of user/database on target Teradata DBMS|setup/teradata_lake/scripts/valiate_tdbench_host.tdb
+
+10|exec|setup_tdbench.tdb|Create the TestTracking table, TestStart and TestStop macros and basic views|setup/teradata_lake/scripts/setup_tdbench.tdb
+11|exec|setup_host_reporting.tdb|Build the views and macros used for host DBMS reporting|setup/teradata_lake/scripts/setup_host_reporting.tdb
+12|exec|setup_host_utilities.tdb|OPTIONAL - Useful macros to assist in benchmark preparation and execution|setup/teradata_lake/scripts/setup_host_utilities.tdb
+

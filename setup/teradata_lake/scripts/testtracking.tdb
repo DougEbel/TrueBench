@@ -1,0 +1,96 @@
+echo Creating or revising Testtracking tables
+sql ${TdBenchServer} delim=eof
+locking row for access select tablename from dbc.tables
+where tablename = 'TestTracking' and databasename = '${TdBenchDb}';
+eof
+if :linecnt > 0 then goto HaveTrackTbl
+
+sql ${TdBenchServer} delim=eof
+CREATE SET TABLE ${TdBenchDb}.TestTracking 
+ (
+	RunId SMALLINT,
+	ClientRunID SMALLINT,
+	BenchSystemName varchar(20)CHARACTER SET LATIN NOT CASESPECIFIC,
+	TestName VARCHAR(50) CHARACTER SET LATIN NOT CASESPECIFIC,
+	StartTime TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
+	ReleaseExecTime TIMESTAMP(6),
+	ActualStopTime TIMESTAMP(6),
+	ResultCount INTEGER,
+	ErrorCount INTEGER,
+	ReportingStopTime TIMESTAMP(6),
+	SessionCnt Smallint default 1,
+	RunTitle VARCHAR(100) CHARACTER SET LATIN NOT CASESPECIFIC,
+	RunCondition VARCHAR(8000) CHARACTER SET LATIN NOT CASESPECIFIC,
+	RunNotes VARCHAR(8000) CHARACTER SET LATIN NOT CASESPECIFIC,
+	ReportingSeconds integer default 0,
+	SystemType Varchar(20),
+	DbmsVersion varchar(20) ,
+	Amps integer,
+	Nodes smallint,
+	NodesUpAtStart smallint,
+	NodesUpAtEnd smallint,
+	WorkersOnAtStart smallint,
+	NonWorkersOnAtStart smallint,
+	WorkersOnAtEnd smallint,
+	NonWorkersOnAtEnd smallint,
+	AverageNodeCpuAtStart float,
+	AverageNodeCpuAtEnd float,
+	RuleSetId integer,
+	TdwmConfigname varchar(30),
+	TdwmChangeTimeStamp timestamp)
+UNIQUE PRIMARY INDEX ( RunId, BenchSystemName );
+Comment on table ${TdBenchDb}.TestTracking as 'Table to save start and stop timestamps for each run';
+eof
+
+label HaveTrackTbl
+
+@# release 6.3 had a different column name for RunCondition.
+sql ${TdBenchServer} select columnname from dbc.columns where database = '${TdBenchDb}' and tablename = 'TestTracking' and columnname = 'TestDescription';
+if :linecnt > 0 then sql ${TdBenchServer} alter table ${TdBenchDb}.TestTracking rename TestDescription as RunCondition;
+
+sql ${TdBenchServer} delim=eof
+alter table ${TdBenchDb}.TestTracking
+add      RunCondition VARCHAR(8000),
+add      RunNotes VARCHAR(8000),
+add     ReportingSeconds integer default 0,
+add     SystemType Varchar(20),
+add     DbmsVersion varchar(20) ,
+add     Amps integer,
+add     Nodes smallint,
+add     NodesUpAtStart smallint,
+add     NodesUpAtEnd smallint,
+add     WorkersOnAtStart smallint,
+add     NonWorkersOnAtStart smallint,
+add     WorkersOnAtEnd smallint,
+add     NonWorkersOnAtEnd smallint,
+add     AverageNodeCpuAtStart float,
+add     AverageNodeCpuAtEnd float,
+add     RuleSetId integer,
+add     TdwmConfigname varchar(30),
+add     TdwmChangeTimeStamp timestamp,
+--  release 8.0 added the following columns
+add     ClientRunID SMALLINT,
+add     ResultCount INTEGER,
+add     ErrorCount INTEGER
+;
+eof
+
+sql ${TdBenchServer} delim=eof
+replace view ${TdBenchDb}.TestTrackingV as
+select RunId
+, ClientRunID
+, TestName
+, Starttime
+, ActualStopTime
+, ResultCount
+, ErrorCount
+, runTitle
+, RunNotes
+, 'PATH_YEAR=''' || (extract(year from starttime) (format '9999')) || 
+''' and PATH_MONTH=''' || (extract(month from starttime) (format '99')) || 
+''' and PATH_DAY=''' || (extract(day from starttime) (format '99')) || '''' Where_Clause
+from ${TdBenchDb}.testtracking;
+
+Comment on view ${TdBenchDb}.TestTrackingV as 'View with subset of TestTracking tables and adding Lake PATH where clause';
+eof
+
