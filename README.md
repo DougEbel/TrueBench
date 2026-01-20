@@ -47,19 +47,56 @@ Installation instructions and driver setup are in **INSTALL.md**.
 <a id="download"></a>
 # Download
 
-The TrueBench python code, help files, and DBMS setup templates is provided in a zip file. 
+TrueBench is distributed as a ZIP file containing the Python code, help files, and DBMS setup
+templates.
 
-1) Go to the GitHub **Releases** page (right panel of this repo)
-2) Download the latest ZIP release (example name: `truebench_01_00.zip`)
-3) Unzip it into a working directory, for example:
-   - Windows: `C:\truebench\`
-   - Linux/macOS: `~/truebench/`
+## Step 1 — Open the latest release on GitHub
 
-The ZIP includes:
+1) On this GitHub repository page, look at the right side panel.
+2) Click the link labeled **Releases** (it shows the number of releases/tags).
+
+This takes you to the GitHub Releases page where published ZIP packages are listed.
+
+## Step 2 — Download the ZIP package
+
+Download the most recent ZIP release asset (example name: `truebench_01_00_003.zip`).
+A .sha256 is also provided for checksum validation. Ignore the 2 assets labeled "Source code..."
+
+## Step 3 — Extract into a working directory
+
+Important: the ZIP is packaged with a top-level folder named `truebench/`.
+Most unzip tools will create that folder automatically.
+
+For best results:
+
+- Create or choose a parent working directory
+- Place the ZIP file in that directory
+- Extract the ZIP there
+
+Examples:
+
+- Windows:
+  - Parent folder: `C:\`
+  - ZIP file location: `C:\truebench_01_00_003.zip`
+  - Extract result: `C:\truebench\...`
+
+- Linux/macOS:
+  - Parent folder: `~/`
+  - ZIP file location: `~/truebench_01_00_003.zip`
+  - Extract result: `~/truebench/...`
+
+After extraction, your TrueBench root directory will be:
+
+- `truebench/`
+
+## What’s included
+
+The ZIP contains:
+
 - `truebench.bat` and `truebench.sh` launchers
-- `truebench_01_00/` code directory and help files
+- `truebench_01_00/` Python code + built-in help files
 - `setup/` vendor DBMS integration scripts and notes
-- `INSTALL.md`, `README.md`, and documentation
+- `INSTALL.md`, `README.md`, and other documentation
 
 ---
 
@@ -72,7 +109,7 @@ Connect to your DBMS using the DB command, which defines a reusable connection a
 DB td teradata url=myserver user=myuser password=?
 ```
 
-That is done once per TrueBench session so you can put it in the truebench.tdb startup file. 
+That is done once per TrueBench session.  It is best to put it in the <a href="#truebench-tdb">truebench.tdb</a> startup file. 
 
 Optional: You can validate connectivity to your DBMS and measure latency with:
 
@@ -212,6 +249,7 @@ Batch mode uses the same parser and engine as interactive mode, ensuring consist
 
 ---
 
+<a id="truebench-tdb"></a>
 # The `truebench.tdb` Startup File
 
 On startup, TrueBench looks for a file named:
