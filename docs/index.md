@@ -65,7 +65,7 @@ It is an **AI-safety mechanism for performance**.
 
 More precisely:
 
-> **TrueBench provides regression observability for systems whose behavior is shaped by AI, open source, and continuous change.**
+ **TrueBench provides regression observability for systems whose behavior is shaped by AI, open source, and continuous change.**
 
 This is:
 - not monitoring
