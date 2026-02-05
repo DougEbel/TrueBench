@@ -21,8 +21,6 @@ Often discovered only after service levels erode.
 
 ## When No One Owns the Change
 
-<video-placeholder-tier1>
-
 In today’s systems, no single team owns *all* the change:
 - application teams move fast
 - infrastructure evolves underneath
@@ -95,8 +93,6 @@ The goal is **evidence**.
 ---
 
 ## Next: From Concept to Reality
-
-<video-placeholder-tier2>
 
 The next video shows how a simple TrueBench test — defined with only a few statements — produces:
 - a persistent execution history
