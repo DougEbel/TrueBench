@@ -111,7 +111,7 @@ No guessing.
 If this problem resonates:
 
 - 📄 **Read the technical README**  
-  → [README.md](../README.md)
+  → [README.md](https://github.com/dougebel/TrueBench/blob/main/README.md)
 
 - 🎥 **Explore focused capability videos**  
   (regression analysis, DBMS linkage, serial execution, AI-driven change)
