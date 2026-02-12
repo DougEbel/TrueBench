@@ -21,6 +21,16 @@ Often discovered only after service levels erode.
 
 ## When No One Owns the Change
 
+<div align="center">
+  <iframe width="800" height="450"
+    src="https://www.youtube.com/embed/HOz6q2U75nY?rel=0"
+    title="TrueBench Objective — Performance Evidence"
+    frameborder="0"
+    allowfullscreen>
+  </iframe>
+</div>
+
+
 In today’s systems, no single team owns *all* the change:
 - application teams move fast
 - infrastructure evolves underneath
