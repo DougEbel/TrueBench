@@ -63,7 +63,16 @@ Instead, it:
 - compares behavior across time
 - links execution windows to native platform telemetry
 
-This makes change **observable**, not speculative.
+This makes change **observable**, not speculative. The following video explains this:
+
+<div align="center">
+  <iframe width="800" height="450"
+    src="https://www.youtube.com/embed/j-USfkBUH8k?rel=0" 
+    title="TrueBench Overview — Modeling Real Workloads"
+    frameborder="0"
+    allowfullscreen>
+  </iframe>
+</div>
 
 ---
 
