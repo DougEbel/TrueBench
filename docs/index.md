@@ -1,21 +1,24 @@
 # Performance Invariance in a World of Continuous Change
 
-Modern information systems no longer change in discrete, well-controlled steps.
+Modern information systems no longer change in discrete, controlled releases.
 
 They evolve continuously — driven by:
+
 - AI-generated code and query patterns
 - open-source library updates
-- cloud platform changes
+- cloud platform evolution
 - optimizer and runtime behavior shifts
-- integration across teams that do not share ownership
+- cross-team integration without shared ownership
 
-Most of these changes are **well-intentioned**, functionally correct, and version-compatible.
+Most changes are correct.  
+Version-compatible.  
+Well-intentioned.
 
-Yet performance still changes.
+Yet behavior still shifts.
 
 Often subtly.  
-Often without a clear cause.  
-Often discovered only after service levels erode.
+Often without attribution.  
+Often detected only after service levels degrade.
 
 ---
 
@@ -23,121 +26,132 @@ Often discovered only after service levels erode.
 
 <div align="center">
   <iframe width="800" height="450"
-    src="https://www.youtube.com/embed/aP_nGRN4ayI?rel=0" 
+    src="https://www.youtube.com/embed/aP_nGRN4ayI?rel=0"
     title="TrueBench Objective — Performance Evidence"
     frameborder="0"
     allowfullscreen>
   </iframe>
 </div>
 
+In modern systems, no single team owns all change.
 
-In today’s systems, no single team owns *all* the change:
-- application teams move fast
-- infrastructure evolves underneath
-- AI accelerates iteration
-- dependencies shift indirectly
+- Applications evolve.
+- Infrastructure shifts.
+- AI accelerates iteration.
+- Dependencies drift indirectly.
 
-Performance degradation is rarely caused by a single decision — it is **emergent behavior**.
+Performance degradation is rarely caused by a single decision.  
+It is emergent behavior.
 
 Traditional approaches struggle here:
-- monitoring shows symptoms, not causes
-- testing validates correctness, not invariance
-- benchmarks predict performance that no longer stays stable
+
+- Monitoring shows symptoms, not causes.
+- Functional testing validates correctness, not invariance.
+- Benchmarks measure capacity, not stability under change.
 
 ---
 
-## A Different Observation Model
+## A Structured Validation Workflow
 
-**TrueBench operates outside the system, observing it as a black box with evidence.  
-That distinction matters.**
+TrueBench introduces a disciplined, repeatable workflow for validating system behavior:
 
-TrueBench does not:
-- instrument application code
-- embed agents
-- intercept execution paths
-- attempt to model internal behavior
+1. **Define database tests** using real queries and parameters
+2. **Model realistic workloads** that reflect production behavior
+3. **Execute repeatable validation runs**
+4. **Analyze execution history for root cause evidence**
 
-Instead, it:
-- preserves historical snapshots of execution behavior
-- replays real workloads deterministically
-- compares behavior across time
-- links execution windows to native platform telemetry
+This is not instrumentation.  
+Not embedded agents.  
+Not synthetic benchmarking.
 
-This makes change **observable**, not speculative. The following video explains this:
+TrueBench operates externally — observing the system as a black box and preserving historical evidence of its behavior.
+
+---
+
+## Overview of the Methodology
 
 <div align="center">
   <iframe width="800" height="450"
-    src="https://www.youtube.com/embed/j-USfkBUH8k?rel=0" 
+    src="https://www.youtube.com/embed/j-USfkBUH8k?rel=0"
     title="TrueBench Overview — Modeling Real Workloads"
     frameborder="0"
     allowfullscreen>
   </iframe>
 </div>
 
+The complete 7-video series walks through:
+
+- Concept and problem framing
+- Real workload modeling
+- Fast installation and setup
+- Building repeatable test suites
+- Linking execution windows to native DBMS telemetry
+- Isolating regression patterns
+- Explaining root cause
+
 ---
 
-## A New Category
+## A Distinct Category
 
-TrueBench is **not** an AI tool.
+TrueBench is not an AI tool.
 
-It is an **AI-safety mechanism for performance**.
+It is a validation discipline for systems whose behavior is shaped by AI, open source, and continuous integration.
 
 More precisely:
 
- **TrueBench provides regression observability for systems whose behavior is shaped by AI, open source, and continuous change.**
+**TrueBench provides regression observability for complex systems under continuous change.**
 
 This is:
+
 - not monitoring
-- not testing
+- not functional testing
 - not benchmarking
 
-It is **performance invariance validation**.
+It is structured system validation.
 
 ---
 
 ## What This Enables
 
 With minimal setup, TrueBench allows teams to:
-- preserve a baseline of real execution behavior
-- detect what changed after any modification
-- quantify how much it changed
-- isolate which queries were affected
-- correlate those changes with platform telemetry
-- explain *why* performance shifted
+
+- Preserve historical execution baselines
+- Detect behavioral drift after any modification
+- Quantify performance change
+- Isolate affected queries
+- Correlate execution windows with platform telemetry
+- Explain why behavior shifted
 
 The goal is not prediction.
 
-The goal is **evidence**.
+The goal is evidence.
 
 ---
 
-## Next: From Concept to Reality
+## Explore Further
 
-The next video shows how a simple TrueBench test — defined with only a few statements — produces:
-- a persistent execution history
-- regression comparisons across runs
-- time-bounded linkage to host DBMS query logging
-- isolation of target workload from background noise
+- 📄 **Technical README**  
+  → https://github.com/dougebel/TrueBench/blob/main/README.md
 
-No synthetic workloads.  
-No invasive instrumentation.  
-No guessing.
+- 🎥 **Full Video Series**  
+  → *(paste your YouTube playlist link here)*
+
+TrueBench is designed to be simple to adopt, extensible over time, and applicable across platforms.
 
 ---
 
-## When to Go Deeper
+## Download the Latest Release
 
-If this problem resonates:
+If you are new to GitHub:
 
-- 📄 **Read the technical README**  
-  → [README.md](https://github.com/dougebel/TrueBench/blob/main/README.md)
+1. Go to the TrueBench repository page  
+   → https://github.com/dougebel/TrueBench  
+2. Click **Releases** (on the right-hand side of the page).  
+3. Download the latest `.zip` distribution package.  
 
-- 🎥 **Explore focused capability videos**  
-  (regression analysis, DBMS linkage, serial execution, AI-driven change)
-
-TrueBench is designed to be simple to adopt, extensible over time, and applicable across platforms — including any system capable of recording time.
+No Git installation is required. Simply download and extract the release package.
 
 ---
 
 *Performance no longer fails loudly.  
-TrueBench exists to make it visible.*
+TrueBench exists to make behavioral change observable.*
