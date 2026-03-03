@@ -26,7 +26,7 @@ Often detected only after service levels degrade.
 
 <div align="center">
   <iframe width="800" height="450"
-    src="https://youtu.be/RRjoY_SzKnk?rel=0"
+    src="https://youtube.com/embed/RRjoY_SzKnk?rel=0"
     title="TrueBench Objective — Performance Evidence"
     frameborder="0"
     allowfullscreen>
@@ -72,7 +72,7 @@ TrueBench operates externally — observing the system as a black box and preser
 
 <div align="center">
   <iframe width="800" height="450"
-    src="https://youtu.be/7S92bzUcyng?rel=0"
+    src="https://youtube.com/embed/7S92bzUcyng?rel=0"
     title="TrueBench Overview — Modeling Real Workloads"
     frameborder="0"
     allowfullscreen>
@@ -137,7 +137,7 @@ The goal is evidence.
 
 <div align="center">
   <iframe width="800" height="450"
-    src="https://www.youtube.com/playlist?list=PLH_YijAOG5xHtI0ap7LHjmnxRCteRJtd1?rel=0"
+    src="https://www.youtube-nocookie.com/embed/videoseries?list=PLH_YijAOG5xHtI0ap7LHjmnxRCteRJtd1&rel=0"
     title="TrueBench — A Structured Approach to System Validation"
     frameborder="0"
     allowfullscreen>
