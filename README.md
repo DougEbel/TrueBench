@@ -64,7 +64,7 @@ TrueBench is useful anywhere teams need **repeatable evidence of system behavior
 
 Common scenarios include:
 
-**Periodic system validation**
+**Periodic system validation**  
 Build a repeatable test suite that can be executed regularly to detect when changes in any system component impact individual queries.
 
 **Database platform upgrades**  
