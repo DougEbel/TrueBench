@@ -16,35 +16,79 @@
 
 ## What is TrueBench?
 
-**TrueBench (QueryDriver)** is an interactive and script-driven workload generator designed to
-help DBAs, performance engineers, and application teams simulate **realistic** database and
-system behavior.
+**TrueBench (QueryDriver)** is a database workload validation framework designed to help  
+DBAs, performance engineers, and application teams reproduce **realistic workload behavior**  
+and measure how systems respond to change.
 
-TrueBench makes it practical to model realistic workloads, replay tests, and track results so
-you can:
+Modern information systems evolve continuously — software updates, configuration changes,  
+cloud infrastructure changes, open-source library upgrades, and now **AI-driven development**  
+can alter system behavior in subtle ways.
 
-- validate DBMS configuration changes against production-like workload behavior
-- create anticipated workloads for new applications before deployment
-- provide engineers with repeatable performance tests for tuning and regression analysis
-- stress test environments and simulate adverse events (latency spikes, concurrency surges,
-  resource contention)
+TrueBench makes it practical to model real workloads, execute controlled tests, and track  
+results across time so teams can detect **performance drift and behavioral change** before  
+users experience problems.
+
+TrueBench helps teams:
+
+- validate DBMS configuration changes against production-like workloads  
+- model anticipated workloads for new applications before deployment  
+- run repeatable performance tests for tuning and regression analysis  
+- stress test environments and simulate adverse events (latency spikes, concurrency surges, resource contention)  
 - measure variability and isolate non-DBMS effects (network jitter, client-side overhead)
 
-TrueBench features:
+---
 
-- a powerful **CLI** for script-driven execution of repeatable tests with variables, IF, GOTO, etc.
-- a full-screen **TUI** (Text User Interface) for defining and editing workloads
-- a portable **Python virtual environment** automatically created on first startup
-- support for 14 DBMS drivers (native Python and ODBC)
-- integrated metadata tracking (SQLite) for run history, results, and comparisons
-- ability to coordinate analysis of query log data on the host DBMS
+## Key Capabilities
 
-TrueBench can execute single diagnostic queries, orchestrate multi-queue benchmark workloads,
+TrueBench provides a practical environment for defining, executing, and analyzing database workloads:
+
+- powerful **CLI** for script-driven execution with variables, IF, GOTO, and automation features  
+- full-screen **TUI (Text User Interface)** for defining and editing workloads interactively  
+- **real workload modeling** based on production query logs  
+- configurable **multi-queue concurrency control** and pacing  
+- integrated **SQLite metadata repository** capturing run history, test definitions, and results  
+- ability to correlate test results with **native DBMS telemetry and query logs**  
+- support for **14 DBMS drivers** using native Python drivers and ODBC  
+- portable **Python virtual environment** automatically created during first startup
+
+TrueBench can execute single diagnostic queries, orchestrate multi-queue workload tests,  
 or automate complex test suites that closely reflect real production behavior.
 
-Installation instructions and driver setup are in **INSTALL.md**.
+Installation instructions and driver setup are provided in **INSTALL.md**.
 
 ---
+
+## Typical Use Cases
+
+TrueBench is useful anywhere teams need **repeatable evidence of system behavior**.
+
+Common scenarios include:
+
+**Periodic system validation**
+Build a repeatable test suite that can be executed regularly to detect when changes in any system component impact individual queries.
+
+**Database platform upgrades**  
+Validate that a new DBMS version, optimizer change, or configuration adjustment does not introduce performance regressions.
+
+**Cloud platform changes**  
+Measure the impact of VM types, storage tiers, or network configuration changes under realistic workloads.
+
+**Application deployment validation**  
+Model anticipated workloads before releasing a new application or service.
+
+**Performance regression detection**  
+Detect subtle query-level changes that aggregate monitoring metrics may hide.
+
+**Root cause investigation**  
+Reproduce and analyze workload behavior during periods of degraded performance.
+
+**Benchmark and proof-of-concept testing**  
+Create realistic workloads when comparing platforms or evaluating infrastructure changes.
+
+---
+
+TrueBench focuses on **repeatable workload validation and behavioral comparison across time**,  
+not synthetic benchmark scores.
 
 <a id="download"></a>
 # Download
