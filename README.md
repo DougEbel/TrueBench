@@ -1,5 +1,7 @@
+# TrueBench – Database Workload Validation and Performance Drift Detection
+
 <p align="center">
-  <img src="images/TrueBench_Logo.png" alt="TrueBench" width="700">
+  <img src="images/TrueBench_Logo.png" alt="TrueBench Database Workload Validation Framework" width="700">
 </p>
 
 <p align="center">
