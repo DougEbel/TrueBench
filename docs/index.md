@@ -26,8 +26,8 @@ Often detected only after service levels degrade.
 
 This video introduces the problem of performance drift in systems that evolve continuously and explains why traditional monitoring and benchmarking approaches fall short:
 
-<a href="https://youtu.be/RRjoY_SzKnk" target="_blank" rel="noopener">
-TrueBench Objective — Performance Evidence in Systems That Constantly Change
+<a href="https://www.youtube.com/playlist?list=PLH_YijAOG5xHtI0ap7LHjmnxRCteRJtd1" target="_blank" rel="noopener">
+Video #1 - TrueBench Objective (opens YouTube playlist)
 </a>
 
 In modern systems, no single team owns all change.
@@ -69,8 +69,8 @@ TrueBench operates externally — observing the system as a black box and preser
 
 This video provides a high-level walkthrough of the methodology and explains how realistic workloads replace synthetic scripts:
 
-<a href="https://youtu.be/7S92bzUcyng" target="_blank" rel="noopener">
-TrueBench Overview — Modeling Real Workloads Instead of Running Scripts
+<a href="https://www.youtube.com/playlist?list=PLH_YijAOG5xHtI0ap7LHjmnxRCteRJtd1" target="_blank" rel="noopener">
+Video #2 - TrueBench Overview (opens YouTube playlist)
 </a>
 
 ---
