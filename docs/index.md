@@ -1,4 +1,39 @@
-# Performance Invariance in a World of Continuous Change
+# TrueBench
+
+#### Performance Invariance in a World of Continuous Change
+
+TrueBench is a lightweight framework for validating database workloads under continuous system change.
+
+It allows teams to run **repeatable query and workload tests** and detect performance drift caused by application, infrastructure, or platform evolution.
+
+---
+
+## Quick Start — Download TrueBench
+
+**Download the latest release:** - Runs with Python on Windows, Linux, and macOS 
+
+➡ **[Download TrueBench](https://github.com/DougEbel/TrueBench/releases/download/01_01_004/truebench_01_01_004.zip)**
+
+1. Download the `.zip` package  
+2. Extract it to a directory  
+3. Follow the setup instructions in `INSTALL.md`
+
+No Git installation is required.
+
+---
+
+## Watch the Introduction (2 minutes)
+
+If you want to understand the problem TrueBench solves, the first video in the following playlist describes that, 
+and is followed by tutorials on using TrueBench's capabilities:
+
+<a href="https://www.youtube.com/playlist?list=PLH_YijAOG5xHtI0ap7LHjmnxRCteRJtd1" target="_blank" rel="noopener">
+TrueBench — A Structured Approach to System Validation (YouTube Playlist)
+</a>
+
+---
+
+## The Problem TrueBench Addresses
 
 Modern information systems no longer change in discrete, controlled releases.
 
@@ -24,13 +59,7 @@ Often detected only after service levels degrade.
 
 ## When No One Owns the Change
 
-This video introduces the problem of performance drift in systems that evolve continuously and explains why traditional monitoring and benchmarking approaches fall short:
-
-<a href="https://www.youtube.com/playlist?list=PLH_YijAOG5xHtI0ap7LHjmnxRCteRJtd1" target="_blank" rel="noopener">
-Video #1 - TrueBench Objective (opens YouTube playlist)
-</a>
-
-In modern systems, no single team owns all change.
+In modern systems, no single team owns all change. Products are integrated from multiple vendors. 
 
 - Applications evolve.
 - Infrastructure shifts.
@@ -62,16 +91,6 @@ Not embedded agents.
 Not synthetic benchmarking.
 
 TrueBench operates externally — observing the system as a black box and preserving historical evidence of its behavior.
-
----
-
-## Overview of the Methodology
-
-This video provides a high-level walkthrough of the methodology and explains how realistic workloads replace synthetic scripts:
-
-<a href="https://www.youtube.com/playlist?list=PLH_YijAOG5xHtI0ap7LHjmnxRCteRJtd1" target="_blank" rel="noopener">
-Video #2 - TrueBench Overview (opens YouTube playlist)
-</a>
 
 ---
 
@@ -112,20 +131,34 @@ The goal is evidence.
 
 ---
 
-## Download the Latest Release
+## Documentation and Methodology
 
-If you are new to GitHub:
+TrueBench is supported by a series of short technical papers that explain the validation methodology in more depth.
 
-1. Go to the TrueBench repository page  
-   → <a href="https://github.com/dougebel/TrueBench" target="_blank" rel="noopener">
-   https://github.com/dougebel/TrueBench
-   </a>
+These documents describe how to:
 
-2. Click **Releases** (on the right-hand side of the page).
+- profile production workloads
+- select representative queries
+- prepare parameters and test data
+- model realistic workloads
+- execute repeatable validation tests
+- analyze performance changes
 
-3. Download the latest `.zip` distribution package.
+📄 **TrueBench Methodology Series**
 
-No Git installation is required. Simply download and extract the release package.
+- TBM-01 — Methodology Overview  
+- TBM-02 — Profiling Production Workloads  
+- TBM-03 — Selecting Representative Queries  
+- TBM-04 — Preparing Queries and Parameters  
+- TBM-05 — Handling Writable Data  
+- TBM-06 — Privacy and Data Protection  
+- TBM-07 — Modeling Workloads  
+- TBM-08 — Repeatable Test Design  
+- TBM-09 — Analyzing Results  
+
+➡ **View the documentation**
+
+https://github.com/DougEbel/TrueBench/tree/main/docs
 
 ---
 
