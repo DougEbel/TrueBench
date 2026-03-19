@@ -158,8 +158,9 @@ These documents describe how to:
 
 ➡ **View the documentation**
 
-https://github.com/DougEbel/TrueBench/tree/main/docs
-
+<a href="https://github.com/DougEbel/TrueBench/tree/main/docs" target="_blank" rel="noopener">
+TrueBench Documents
+</a>
 ---
 
 ### Details of the methodology (in order)
