@@ -111,7 +111,7 @@ Start with the overview:
 
 Additional documents:
 
-→ [https://dougebel.github.io/TrueBench/Methodology/index.md](https://dougebel.github.io/TrueBench/Methodology/index.md)
+→ [https://dougebel.github.io/TrueBench/Methodology/index.md](https://dougebel.github.io/TrueBench/Methodology/)
 
 The methodology progresses from:
 - understanding production workload behavior  
