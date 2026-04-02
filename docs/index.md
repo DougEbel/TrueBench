@@ -107,11 +107,11 @@ TrueBench is built around a structured methodology for validating system behavio
 
 Start with the overview:
 
-→ [TBM-01_TrueBench_Methodology_Overview.pdf](https://dougebel.github.io/TrueBench/docs/Methodology/TBM-01_TrueBench_Methodology_Overview.pdf)
+→ [TBM-01_TrueBench_Methodology_Overview.pdf](https://dougebel.github.io/TrueBench/Methodology/TBM-01_TrueBench_Methodology_Overview.pdf)
 
 Additional documents:
 
-→ [https://dougebel.github.io/TrueBench/docs/Methodology/](https://dougebel.github.io/TrueBench/docs/Methodology/)
+→ [https://dougebel.github.io/TrueBench/Methodology/index.md](https://dougebel.github.io/TrueBench/Methodology/index.md)
 
 The methodology progresses from:
 - understanding production workload behavior  
