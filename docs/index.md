@@ -66,7 +66,7 @@ It is **repeatable validation of real system behavior**.
 
 **Get started with TrueBench:**
 
-→ https://github.com/DougEbel/TrueBench/releases/download/01_01_004/truebench_01_01_004.zip
+→ [truebench_01-01-004.zip](https://github.com/DougEbel/TrueBench/releases/download/01_01_004/truebench_01_01_004.zip)
 
 ---
 
@@ -107,11 +107,11 @@ TrueBench is built around a structured methodology for validating system behavio
 
 Start with the overview:
 
-→ https://dougebel.github.io/TrueBench/docs/Methodology/TBM-01_TrueBench_Methodology_Overview.pdf
+→ [TBM-01_TrueBench_Methodology_Overview.pdf](https://dougebel.github.io/TrueBench/docs/Methodology/TBM-01_TrueBench_Methodology_Overview.pdf)
 
 Additional documents:
 
-→ https://dougebel.github.io/TrueBench/docs/Methodology/
+→ [https://dougebel.github.io/TrueBench/docs/Methodology/](https://dougebel.github.io/TrueBench/docs/Methodology/)
 
 The methodology progresses from:
 - understanding production workload behavior  
@@ -125,7 +125,7 @@ The methodology progresses from:
 
 ### Video walkthrough
 
-→ https://www.youtube.com/playlist?list=PLH_YijAOG5xHtI0ap7LHjmnxRCteRJtd1
+→ [TrueBench Playlist on YouTube](https://www.youtube.com/playlist?list=PLH_YijAOG5xHtI0ap7LHjmnxRCteRJtd1)
 
 ---
 
