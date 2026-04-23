@@ -10,7 +10,7 @@ This methodology defines a structured approach to validating system behavior und
 - [TBM-04 — Converting Workloads into Executable Tests](TBM_04_Prepare_Queries_And_Parameters.pdf) 
 - TBM-05 Handling Writable Workloads
 - TBM-06 Handling Sensitive Data
-- TBM-07 Modeling Realistic Workloads
+- [TBM-07 Modeling Realistic Workloads](TBM_07_Model_Realistic_Workloads.pdf)
 - TBM-08 Executing Repeatable Tests
 - TBM-09 Analyzing Workload Results
 
